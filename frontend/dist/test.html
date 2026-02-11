@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vue Test</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/element-plus/2.4.4/index.css">
+</head>
+<body>
+    <div id="app">
+        {{ message }}
+    </div>
+    <script src="https://cdn.bootcdn.net/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/element-plus/2.4.4/index.full.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/element-plus-icons-vue/2.3.1/global.iife.min.js"></script>
+    <script>
+        console.log('Vue:', typeof Vue);
+        console.log('ElementPlus:', typeof ElementPlus);
+        console.log('ElementPlusIconsVue:', typeof ElementPlusIconsVue);
+
+        const { createApp, ref } = Vue;
+        const app = createApp({
+            setup() {
+                const message = ref('Hello Vue!');
+                return { message };
+            }
+        });
+
+        app.use(ElementPlus);
+        app.mount('#app');
+    </script>
+</body>
+</html>

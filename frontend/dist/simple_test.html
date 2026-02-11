@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>历史作业测试</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #f0f9ff;
+            border-left: 4px solid #67C23A;
+            color: #67C23A;
+        }
+        .error {
+            background-color: #fef0f0;
+            border-left: 4px solid #F56C6C;
+            color: #F56C6C;
+        }
+        .info {
+            background-color: #ecf5ff;
+            border-left: 4px solid #409EFF;
+            color: #409EFF;
+        }
+        button {
+            background-color: #409EFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #66b1ff;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #409EFF;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>历史作业 API 测试</h1>
+        
+        <div>
+            <button onclick="testFetch()">使用 Fetch 测试</button>
+            <button onclick="testAxios()">使用 Axios 测试</button>
+            <button onclick="testCORS()">测试 CORS</button>
+        </div>
+
+        <div id="status"></div>
+
+        <div id="result" style="display: none;">
+            <h2>作业列表 (<span id="jobCount"></span> 个)</h2>
+            <table id="jobTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Job ID</th>
+                        <th>作业名称</th>
+                        <th>状态</th>
+                        <th>创建时间</th>
+                    </tr>
+                </thead>
+                <tbody id="jobTableBody"></tbody>
+            </table>
+
+            <h2>原始响应</h2>
+            <pre id="rawResponse"></pre>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+
+        async function testFetch() {
+            showStatus('正在使用 Fetch 测试 API...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/jobs/history`);
+                
+                console.log('Fetch Response Status:', response.status);
+                console.log('Fetch Response Headers:', response.headers);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                console.log('Fetch Response Data:', data);
+                
+                displayResult(data);
+                showStatus(`✅ 成功获取 ${data.length} 个历史作业 (使用 Fetch)`, 'success');
+                
+            } catch (error) {
+                console.error('Fetch Error:', error);
+                showStatus(`❌ Fetch 错误: ${error.message}`, 'error');
+            }
+        }
+
+        async function testAxios() {
+            showStatus('正在使用 Axios 测试 API...', 'info');
+            
+            try {
+                const response = await axios.get(`${API_BASE}/api/jobs/history`);
+                
+                console.log('Axios Response:', response);
+                
+                const data = response.data;
+                
+                console.log('Axios Response Data:', data);
+                
+                displayResult(data);
+                showStatus(`✅ 成功获取 ${data.length} 个历史作业 (使用 Axios)`, 'success');
+                
+            } catch (error) {
+                console.error('Axios Error:', error);
+                showStatus(`❌ Axios 错误: ${error.message}`, 'error');
+            }
+        }
+
+        async function testCORS() {
+            showStatus('正在测试 CORS...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/jobs/history`, {
+                    method: 'GET',
+                    mode: 'cors',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                console.log('CORS Test Response:', data);
+                
+                displayResult(data);
+                showStatus(`✅ CORS 测试成功，获取 ${data.length} 个作业`, 'success');
+                
+            } catch (error) {
+                console.error('CORS Error:', error);
+                showStatus(`❌ CORS 错误: ${error.message}`, 'error');
+            }
+        }
+
+        function displayResult(data) {
+            document.getElementById('result').style.display = 'block';
+            document.getElementById('jobCount').textContent = data.length;
+            
+            const tbody = document.getElementById('jobTableBody');
+            tbody.innerHTML = '';
+            
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">没有作业数据</td></tr>';
+                document.getElementById('rawResponse').textContent = '[]';
+                return;
+            }
+            
+            data.forEach((job, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td style="word-break: break-all;">${job.job_id || 'N/A'}</td>
+                    <td>${job.job_name || job.job_id || 'N/A'}</td>
+                    <td><span style="padding: 4px 8px; border-radius: 4px; background-color: ${getStateColor(job.state)};">${job.state || 'N/A'}</span></td>
+                    <td>${formatDate(job.created_at)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+            
+            document.getElementById('rawResponse').textContent = JSON.stringify(data, null, 2);
+        }
+
+        function getStateColor(state) {
+            const colors = {
+                'RUNNING': '#67C23A',
+                'FINISHED': '#409EFF',
+                'FAILED': '#F56C6C',
+                'CANCELED': '#E6A23C',
+                'STOPPED': '#E6A23C',
+                'CREATED': '#909399'
+            };
+            return colors[state] || '#909399';
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleString('zh-CN');
+            } catch (e) {
+                return dateString;
+            }
+        }
+
+        // 页面加载时自动测试
+        window.addEventListener('load', () => {
+            console.log('页面已加载');
+            showStatus('页面已就绪，请点击按钮测试 API', 'info');
+        });
+    </script>
+</body>
+</html>

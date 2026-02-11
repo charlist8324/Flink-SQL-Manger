@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>历史作业调试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #409EFF;
+            padding-bottom: 10px;
+        }
+        .debug-section {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            border-left: 4px solid #409EFF;
+        }
+        .debug-section h3 {
+            margin-top: 0;
+            color: #409EFF;
+        }
+        button {
+            background-color: #409EFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #66b1ff;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            font-size: 12px;
+        }
+        th {
+            background-color: #409EFF;
+            color: white;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #f0f9ff;
+            border-left: 4px solid #67C23A;
+            color: #67C23A;
+        }
+        .error {
+            background-color: #fef0f0;
+            border-left: 4px solid #F56C6C;
+            color: #F56C6C;
+        }
+        .info {
+            background-color: #ecf5ff;
+            border-left: 4px solid #409EFF;
+            color: #409EFF;
+        }
+        .step {
+            padding: 10px;
+            margin: 5px 0;
+            background-color: white;
+            border-radius: 4px;
+        }
+        .step-number {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            line-height: 24px;
+            text-align: center;
+            border-radius: 50%;
+            background-color: #409EFF;
+            color: white;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>历史作业调试工具</h1>
+        
+        <div style="margin: 20px 0;">
+            <button onclick="startDebug()">开始调试</button>
+            <button onclick="testStep1()">步骤1: 测试API连接</button>
+            <button onclick="testStep2()">步骤2: 获取数据</button>
+            <button onclick="testStep3()">步骤3: 检查数据格式</button>
+            <button onclick="testStep4()">步骤4: 模拟前端渲染</button>
+            <button onclick="clearDebug()">清空</button>
+        </div>
+
+        <div id="status" class="status info" style="display: none;"></div>
+
+        <div id="debug-output"></div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let debugData = null;
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = message;
+            statusDiv.className = `status ${type}`;
+            statusDiv.style.display = 'block';
+        }
+
+        function addDebugStep(title, content) {
+            const output = document.getElementById('debug-output');
+            const step = document.createElement('div');
+            step.className = 'debug-section';
+            step.innerHTML = `
+                <h3><span class="step-number">★</span>${title}</h3>
+                ${content}
+            `;
+            output.appendChild(step);
+        }
+
+        function clearDebug() {
+            document.getElementById('debug-output').innerHTML = '';
+            document.getElementById('status').style.display = 'none';
+            debugData = null;
+        }
+
+        async function startDebug() {
+            clearDebug();
+            showStatus('开始调试...', 'info');
+            
+            await testStep1();
+            await testStep2();
+            await testStep3();
+            await testStep4();
+            
+            showStatus('调试完成！', 'success');
+        }
+
+        async function testStep1() {
+            addDebugStep('步骤1: 测试API连接', `
+                <p>正在测试后端API连接...</p>
+                <p>API地址: <code>${API_BASE}/api/jobs/history</code></p>
+                <p>页面地址: <code>${window.location.href}</code></p>
+            `);
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/jobs/history`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                addDebugStep('步骤1结果', `
+                    <p style="color: green;">✅ API连接成功</p>
+                    <p>状态码: ${response.status}</p>
+                    <p>Content-Type: ${response.headers.get('Content-Type')}</p>
+                `);
+                
+                return true;
+            } catch (error) {
+                addDebugStep('步骤1结果', `
+                    <p style="color: red;">❌ API连接失败</p>
+                    <p>错误: ${error.message}</p>
+                    <p>可能的原因:</p>
+                    <ul>
+                        <li>后端服务未启动</li>
+                        <li>CORS跨域问题</li>
+                        <li>网络连接问题</li>
+                    </ul>
+                `);
+                return false;
+            }
+        }
+
+        async function testStep2() {
+            addDebugStep('步骤2: 获取数据', `
+                <p>正在获取历史作业数据...</p>
+            `);
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/jobs/history`);
+                const data = await response.json();
+                
+                debugData = data;
+                
+                addDebugStep('步骤2结果', `
+                    <p style="color: green;">✅ 数据获取成功</p>
+                    <p>数据类型: ${typeof data}</p>
+                    <p>是否为数组: ${Array.isArray(data)}</p>
+                    <p>数据长度: ${data.length}</p>
+                    <details>
+                        <summary>查看原始JSON数据</summary>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    </details>
+                `);
+                
+                return data;
+            } catch (error) {
+                addDebugStep('步骤2结果', `
+                    <p style="color: red;">❌ 数据获取失败</p>
+                    <p>错误: ${error.message}</p>
+                `);
+                return null;
+            }
+        }
+
+        async function testStep3() {
+            if (!debugData) {
+                addDebugStep('步骤3: 检查数据格式', `
+                    <p style="color: orange;">⚠️ 没有数据可检查</p>
+                    <p>请先完成步骤2</p>
+                `);
+                return;
+            }
+            
+            addDebugStep('步骤3: 检查数据格式', `
+                <p>正在检查数据格式...</p>
+            `);
+            
+            const data = debugData;
+            let issues = [];
+            
+            // 检查是否为数组
+            if (!Array.isArray(data)) {
+                issues.push('数据不是数组');
+            }
+            
+            // 检查数组长度
+            if (data.length === 0) {
+                issues.push('数组为空');
+            }
+            
+            // 检查每个数据项
+            data.forEach((item, index) => {
+                if (!item.job_id) {
+                    issues.push(`第${index + 1}项缺少job_id字段`);
+                }
+                if (!item.state) {
+                    issues.push(`第${index + 1}项缺少state字段`);
+                }
+            });
+            
+            if (issues.length === 0) {
+                addDebugStep('步骤3结果', `
+                    <p style="color: green;">✅ 数据格式检查通过</p>
+                    <p>所有数据项都包含必要字段</p>
+                    <table>
+                        <tr>
+                            <th>序号</th>
+                            <th>Job ID</th>
+                            <th>作业名称</th>
+                            <th>状态</th>
+                            <th>创建时间</th>
+                        </tr>
+                        ${data.slice(0, 5).map((item, i) => `
+                            <tr>
+                                <td>${i + 1}</td>
+                                <td>${item.job_id || 'N/A'}</td>
+                                <td>${item.job_name || item.job_id || 'N/A'}</td>
+                                <td>${item.state || 'N/A'}</td>
+                                <td>${item.created_at || 'N/A'}</td>
+                            </tr>
+                        `).join('')}
+                    </table>
+                    ${data.length > 5 ? `<p>... 还有 ${data.length - 5} 个作业</p>` : ''}
+                `);
+            } else {
+                addDebugStep('步骤3结果', `
+                    <p style="color: orange;">⚠️ 发现${issues.length}个问题</p>
+                    <ul>
+                        ${issues.map(issue => `<li>${issue}</li>`).join('')}
+                    </ul>
+                `);
+            }
+        }
+
+        async function testStep4() {
+            if (!debugData || debugData.length === 0) {
+                addDebugStep('步骤4: 模拟前端渲染', `
+                    <p style="color: orange;">⚠️ 没有数据可渲染</p>
+                `);
+                return;
+            }
+            
+            addDebugStep('步骤4: 模拟前端渲染', `
+                <p>模拟Vue.js的数据绑定和渲染...</p>
+                <div style="margin-top: 10px;">
+                    <h4>模拟表格渲染 (类似 Element Plus el-table):</h4>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>作业名称</th>
+                                <th>Job ID</th>
+                                <th>状态</th>
+                                <th>创建时间</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${debugData.map(job => `
+                                <tr>
+                                    <td>${job.job_name || job.job_id || 'N/A'}</td>
+                                    <td style="font-size: 11px;">${job.job_id || 'N/A'}</td>
+                                    <td><span style="padding: 2px 8px; border-radius: 4px; background-color: ${getStateColor(job.state)}; color: white;">${job.state || 'N/A'}</span></td>
+                                    <td>${formatDate(job.created_at)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                <p style="color: green; margin-top: 10px;">✅ 模拟渲染成功</p>
+                <p>如果上面的表格能正常显示，说明数据格式是正确的，问题可能在于前端的Vue.js响应式系统。</p>
+            `);
+        }
+
+        function getStateColor(state) {
+            const colors = {
+                'RUNNING': '#67C23A',
+                'FINISHED': '#409EFF',
+                'FAILED': '#F56C6C',
+                'CANCELED': '#E6A23C',
+                'STOPPED': '#E6A23C',
+                'CREATED': '#909399'
+            };
+            return colors[state] || '#909399';
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleString('zh-CN');
+            } catch (e) {
+                return dateString;
+            }
+        }
+
+        // 页面加载时显示提示
+        window.addEventListener('load', () => {
+            showStatus('页面已就绪，请点击"开始调试"按钮开始诊断', 'info');
+        });
+    </script>
+</body>
+</html>
