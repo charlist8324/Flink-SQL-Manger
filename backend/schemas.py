@@ -139,10 +139,13 @@ class TableCreateRequest(BaseModel):
     connector_type: str
     table_name: str
     fields: List[FieldDefinition]
-    # For manual connection details if datasource_id is missing
     host: Optional[str] = None
     port: Optional[int] = None
     username: Optional[str] = None
     password: Optional[str] = None
     database: Optional[str] = None
-    url: Optional[str] = None # JDBC URL if applicable
+    url: Optional[str] = None
+    replication_num: Optional[int] = None
+    buckets: Optional[int] = None
+    table_type: Optional[str] = None  # UNIQUE, AGGREGATE, DUPLICATE
+    custom_sql: Optional[str] = None

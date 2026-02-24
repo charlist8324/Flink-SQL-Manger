@@ -5,7 +5,7 @@ from typing import List, Dict, Any, Optional
 from sqlalchemy import create_engine, Column, String, Integer, Text, TIMESTAMP, JSON, BigInteger, desc
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.pool import QueuePool
-from .database import get_database_url
+from database import get_database_url
 
 logger = logging.getLogger(__name__)
 

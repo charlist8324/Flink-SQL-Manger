@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flink Manager</title>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus@2.3.8/dist/index.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body, #app { height: 100%; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+        .layout-container { height: 100%; display: flex; flex-direction: column; }
+        .header { background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%); padding: 0 20px; display: flex; align-items: center; justify-content: space-between; height: 60px; }
+        .header h1 { color: #fff; font-size: 20px; font-weight: 500; }
+        .header-info { color: rgba(255,255,255,0.85); font-size: 14px; }
+        .main-container { flex: 1; display: flex; overflow: hidden; }
+        .sidebar {
+            width: 200px;
+            background-color: #001529;
+            color: #fff;
+        }
+        .sidebar .el-menu { border-right: none; }
+        .sidebar .el-menu-item {
+            height: 50px;
+            line-height: 50px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 20px;
+        }
+        .sidebar .el-menu-item .el-icon {
+            font-size: 18px;
+        }
+        .sidebar .el-menu-item span {
+            font-size: 14px;
+        }
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            background-color: #f0f2f5;
+            padding: 20px;
+        }
+        .native-select {
+            padding: 8px 12px;
+            border: 1px solid #dcdfe6;
+            border-radius: 4px;
+            font-size: 14px;
+            width: 100%;
+            background-color: #fff;
+        }
+        .native-select:focus {
+            outline: none;
+            border-color: #409eff;
+        }
+        .dashboard-card { margin-bottom: 20px; }
+        .stat-card { text-align: center; padding: 20px; }
+        .stat-card .number { font-size: 32px; font-weight: bold; color: #1890ff; }
+        .stat-card .label { color: #666; margin-top: 8px; }
+        .stat-card.success .number { color: #52c41a; }
+        .stat-card.warning .number { color: #faad14; }
+        .stat-card.danger .number { color: #f5222d; }
+        .job-status { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+        .job-status.RUNNING { background: #e6f7ff; color: #1890ff; }
+        .job-status.FINISHED { background: #f6ffed; color: #52c41a; }
+        .job-status.CANCELED { background: #fff7e6; color: #faad14; }
+        .job-status.FAILED { background: #fff2f0; color: #f5222d; }
+        .job-status.CREATED { background: #f0f0f0; color: #666; }
+        .cluster-status { display: inline-flex; align-items: center; gap: 6px; }
+        .cluster-status .dot { width: 8px; height: 8px; border-radius: 50%; }
+        .cluster-status .dot.online { background: #52c41a; }
+        .cluster-status .dot.offline { background: #f5222d; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="layout-container">
+            <!-- 顶部导航 -->
+            <el-header class="header" height="60px">
+                <h1>Flink 实时计算管理系统</h1>
+                <div class="header-info">
+                    <span class="cluster-status">
+                        <span class="dot" :class="clusterStatus.status"></span>
+                        <span>{{ clusterStatus.status === 'online' ? '集群在线' : '集群离线' }}</span>
+                        <span v-if="clusterStatus.flink_version">| Flink {{ clusterStatus.flink_version }}</span>
+                    </span>
+                </div>
+            </el-header>
+
+            <div class="main-container">
+                <!-- 侧边导航 -->
+                <div class="sidebar">
+                    <el-menu
+                        :default-active="activeMenu"
+                        background-color="#001529"
+                        text-color="rgba(255,255,255,0.65)"
+                        active-text-color="#fff"
+                        @select="handleMenuSelect"
+                    >
+                        <el-menu-item index="dashboard">
+                            <el-icon><Monitor /></el-icon>
+                            <span>仪表盘</span>
+                        </el-menu-item>
+                        <el-menu-item index="sql">
+                            <el-icon><Edit /></el-icon>
+                            <span>可视化配置</span>
+                        </el-menu-item>
+                        <el-menu-item index="jobs">
+                            <el-icon><List /></el-icon>
+                            <span>作业管理</span>
+                        </el-menu-item>
+                        <el-menu-item index="jars">
+                            <el-icon><Files /></el-icon>
+                            <span>Jar 管理</span>
+                        </el-menu-item>
+                        <el-menu-item index="cluster">
+                            <el-icon><Connection /></el-icon>
+                            <span>集群监控</span>
+                        </el-menu-item>
+                        <el-menu-item index="datasources">
+                            <el-icon><Coin /></el-icon>
+                            <span>数据源管理</span>
+                        </el-menu-item>
+                    </el-menu>
+                </div>
+
+                <!-- 主内容区 -->
+                <div class="content">
+                    <component :is="currentPage" />
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/vue@3.3.4/dist/vue.global.prod.js"></script>
+    <script src="https://unpkg.com/element-plus@2.3.8/dist/index.full.js"></script>
+    <script src="https://unpkg.com/@element-plus/icons-vue@2.3.1"></script>
+    <script>
+        const { createApp, ref, computed, defineAsyncComponent, onMounted } = Vue;
+
+        // 注册所有图标
+        const icons = Object.fromEntries(
+            Object.entries(ElementPlusIconsVue).map(([key, component]) => [key, component])
+        );
+
+        // 页面组件
+        const pages = {
+            dashboard: defineAsyncComponent(() => import('./pages/dashboard.js')),
+            sql: defineAsyncComponent(() => import('./pages/sql.js')),
+            jobs: defineAsyncComponent(() => import('./pages/jobs.js')),
+            jars: defineAsyncComponent(() => import('./pages/jars.js')),
+            cluster: defineAsyncComponent(() => import('./pages/cluster.js')),
+            datasources: defineAsyncComponent(() => import('./pages/datasources.js'))
+        };
+
+        const app = createApp({
+            setup() {
+                const activeMenu = ref('dashboard');
+                const currentPage = computed(() => pages[activeMenu.value] || pages.dashboard);
+                const clusterStatus = ref({
+                    status: 'offline',
+                    flink_version: '',
+                    jobs_running: 0,
+                    jobs_finished: 0,
+                    jobs_cancelled: 0,
+                    jobs_failed: 0,
+                    taskmanagers: 0,
+                    slots_total: 0,
+                    slots_available: 0
+                });
+
+                // 获取集群状态
+                async function fetchClusterStatus() {
+                    try {
+                        const response = await fetch('/api/cluster/status');
+                        const data = await response.json();
+                        Object.assign(clusterStatus.value, data);
+                        clusterStatus.value.status = 'online';
+                    } catch (error) {
+                        clusterStatus.value.status = 'offline';
+                    }
+                }
+
+                function handleMenuSelect(index) {
+                    activeMenu.value = index;
+                    // 更新URL hash
+                    window.location.hash = index;
+                }
+
+                // 从hash初始化页面
+                onMounted(() => {
+                    const hash = window.location.hash.slice(1);
+                    if (hash && pages[hash]) {
+                        activeMenu.value = hash;
+                    }
+                    fetchClusterStatus();
+                    setInterval(fetchClusterStatus, 10000);
+                });
+
+                return {
+                    activeMenu,
+                    currentPage,
+                    clusterStatus,
+                    handleMenuSelect
+                };
+            }
+        });
+
+        app.use(ElementPlus);
+
+        // 注册图标
+        Object.entries(icons).forEach(([name, component]) => {
+            app.component(name, component);
+        });
+
+        app.mount('#app');
+    </script>
+</body>
+</html>

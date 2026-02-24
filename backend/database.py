@@ -9,7 +9,7 @@ class DatabaseSettings(BaseSettings):
     """数据库配置"""
     
     # MySQL数据库配置
-    DB_HOST: str = "10.178.80.101"
+    DB_HOST: str = "192.168.31.251"
     DB_PORT: int = 3306
     DB_USER: str = "root"
     DB_PASSWORD: str = "Admin@900"

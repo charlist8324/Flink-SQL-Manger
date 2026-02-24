@@ -1,11 +1,11 @@
 from pathlib import Path
 
 # Flink JobManager REST 地址
-FLINK_REST_URL = "http://10.160.10.221:8081"
+FLINK_REST_URL = "http://192.168.31.251:8081"
 
 # Flink SQL Gateway 地址（默认端口 8083）
 # 如果 SQL Gateway 和 Flink REST API 不在同一主机，请修改此处
-SQL_GATEWAY_URL = "http://10.160.10.221:8083"
+SQL_GATEWAY_URL = "http://192.168.31.251:8083"
 
 # SQL 脚本存放目录（相对后端运行目录）
 BASE_DIR = Path(__file__).resolve().parent

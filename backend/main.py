@@ -30,20 +30,20 @@ logger = logging.getLogger(__name__)
 logger.info(f"=== Flink Manager 启动 ===")
 logger.info(f"日志文件: {LOG_FILE}")
 
-from .config import FLINK_REST_URL, SQL_FILES_DIR, BASE_DIR
-from .database import db_settings, get_database_url
-from .db_operations import (
+from config import FLINK_REST_URL, SQL_FILES_DIR, BASE_DIR
+from database import db_settings, get_database_url
+from db_operations import (
     db_manager, save_job, update_job_state, get_job, get_all_jobs,
     save_savepoint, get_latest_savepoint, get_savepoints, log_operation,
     add_datasource, get_datasources, update_datasource, delete_datasource, test_datasource_connection
 )
-from .schemas import (
+from schemas import (
     SqlJobSubmitRequest, JarJobSubmitRequest, JobSubmitResponse,
     ClusterStatus, JobInfo, JobDetail, SavepointRequest, ResumeJobRequest,
     DataSourceCreateRequest, DataSourceUpdateRequest, DataSourceResponse,
     DataSourceBase, TableCreateRequest
 )
-from .flink_client import flink_client, FlinkClient
+from flink_client import flink_client, FlinkClient
 from sqlalchemy import create_engine, inspect, text
 from pydantic import BaseModel
 from urllib.parse import quote_plus
@@ -151,6 +151,62 @@ async def get_database_tables(request: DatabaseConnectionRequest):
         raise HTTPException(status_code=500, detail=f"连接数据库失败: {str(e)}")
 
 
+@app.post("/api/metadata/columns", tags=["系统"])
+async def get_table_columns(request: DatabaseConnectionRequest, table_name: str = None):
+    """连接数据库并获取指定表的字段信息"""
+    try:
+        from urllib.parse import quote_plus
+        
+        encoded_user = quote_plus(request.username)
+        encoded_password = quote_plus(request.password)
+        db_url = f"mysql+pymysql://{encoded_user}:{encoded_password}@{request.host}:{request.port}/{request.database}"
+        
+        engine = create_engine(db_url)
+        inspector = inspect(engine)
+        
+        if table_name:
+            columns = inspector.get_columns(table_name)
+            pk_constraint = inspector.get_pk_constraint(table_name)
+            pk_columns = pk_constraint.get('constrained_columns', [])
+            
+            result = []
+            for col in columns:
+                col_type = str(col['type']).lower()
+                flink_type = "STRING"
+                
+                if 'int' in col_type and 'bigint' not in col_type:
+                    flink_type = "INT"
+                elif 'bigint' in col_type:
+                    flink_type = "BIGINT"
+                elif 'float' in col_type:
+                    flink_type = "FLOAT"
+                elif 'double' in col_type:
+                    flink_type = "DOUBLE"
+                elif 'decimal' in col_type:
+                    flink_type = "DECIMAL"
+                elif 'bool' in col_type:
+                    flink_type = "BOOLEAN"
+                elif 'timestamp' in col_type or 'datetime' in col_type:
+                    flink_type = "TIMESTAMP"
+                elif 'date' in col_type and 'datetime' not in col_type:
+                    flink_type = "DATE"
+                elif 'time' in col_type and 'timestamp' not in col_type and 'datetime' not in col_type:
+                    flink_type = "TIME"
+                
+                result.append({
+                    "name": col['name'],
+                    "type": flink_type,
+                    "original_type": str(col['type']),
+                    "primaryKey": col['name'] in pk_columns
+                })
+            return {"columns": result}
+        else:
+            return {"columns": []}
+    except Exception as e:
+        logger.error(f"获取字段失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取字段失败: {str(e)}")
+
+
 @app.post("/api/metadata/tables/create", tags=["系统"])
 async def create_table(request: TableCreateRequest):
     """创建物理表"""
@@ -226,6 +282,8 @@ async def create_table(request: TableCreateRequest):
         columns_sql = []
         primary_keys = []
         
+        logger.info(f"创建表请求: table_name={request.table_name}, connector_type={request.connector_type}, fields_count={len(request.fields) if request.fields else 0}")
+        
         for field in request.fields:
             # 类型映射
             sql_type = field.type.upper()
@@ -257,26 +315,48 @@ async def create_table(request: TableCreateRequest):
             if field.primaryKey:
                 primary_keys.append(f"`{field.name}`")
                 
-        create_sql = f"CREATE TABLE `{request.table_name}` (\n"
-        create_sql += ",\n".join(columns_sql)
+        if not columns_sql:
+            raise HTTPException(status_code=400, detail="字段列表不能为空")
         
-        if primary_keys:
-            create_sql += f",\nPRIMARY KEY ({', '.join(primary_keys)})"
-            
-        create_sql += "\n)"
+        is_doris = request.connector_type in ['doris', 'doris-cdc']
+        is_starrocks = request.connector_type in ['starrocks', 'starrocks-cdc']
+        is_olap = is_doris or is_starrocks
+        table_type = request.table_type or 'UNIQUE'  # 默认主键表
+        buckets = request.buckets or 10
+        replication_num = request.replication_num or 1
         
-        # StarRocks/Doris 特定语法
-        is_olap = request.connector_type in ['starrocks', 'doris', 'starrocks-cdc', 'doris-cdc']
         if is_olap:
-            create_sql += " ENGINE=OLAP"
-            if primary_keys:
-                create_sql += f"\nDISTRIBUTED BY HASH({', '.join(primary_keys)}) BUCKETS 10"
-            else:
-                # 如果没有主键，StarRocks 需要指定分布键
-                if request.fields:
-                    create_sql += f"\nDISTRIBUTED BY HASH(`{request.fields[0].name}`) BUCKETS 10"
+            create_sql = f"CREATE TABLE `{request.table_name}` (\n"
+            create_sql += ",\n".join(columns_sql)
+            create_sql += "\n) ENGINE=OLAP"
             
-            create_sql += "\nPROPERTIES(\"replication_num\" = \"1\")"
+            if is_doris:
+                if table_type == 'UNIQUE' and primary_keys:
+                    create_sql += f"\nUNIQUE KEY ({', '.join(primary_keys)})"
+                elif table_type == 'AGGREGATE' and primary_keys:
+                    create_sql += f"\nAGGREGATE KEY ({', '.join(primary_keys)})"
+                elif table_type == 'DUPLICATE' and primary_keys:
+                    create_sql += f"\nDUPLICATE KEY ({', '.join(primary_keys)})"
+            elif is_starrocks:
+                if table_type == 'UNIQUE' and primary_keys:
+                    create_sql += f"\nPRIMARY KEY ({', '.join(primary_keys)})"
+                elif table_type == 'AGGREGATE' and primary_keys:
+                    create_sql += f"\nAGGREGATE KEY ({', '.join(primary_keys)})"
+                elif table_type == 'DUPLICATE' and primary_keys:
+                    create_sql += f"\nDUPLICATE KEY ({', '.join(primary_keys)})"
+            
+            if primary_keys:
+                create_sql += f"\nDISTRIBUTED BY HASH({', '.join(primary_keys)}) BUCKETS {buckets}"
+            elif request.fields:
+                create_sql += f"\nDISTRIBUTED BY HASH(`{request.fields[0].name}`) BUCKETS {buckets}"
+            
+            create_sql += f"\nPROPERTIES(\"replication_num\" = \"{replication_num}\")"
+        else:
+            create_sql = f"CREATE TABLE `{request.table_name}` (\n"
+            create_sql += ",\n".join(columns_sql)
+            if primary_keys:
+                create_sql += f",\nPRIMARY KEY ({', '.join(primary_keys)})"
+            create_sql += "\n)"
 
         logger.info(f"Executing Create Table SQL: {create_sql}")
         
@@ -284,17 +364,62 @@ async def create_table(request: TableCreateRequest):
             conn.execute(text(create_sql))
             conn.commit()
             
-        return {"status": "success", "message": f"表 {request.table_name} 创建成功"}
+        return {"status": "success", "message": f"表 {request.table_name} 创建成功", "create_sql": create_sql}
         
     except Exception as e:
         logger.error(f"创建表失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"创建表失败: {str(e)}")
 
-from .schemas import (
+
+@app.post("/api/metadata/tables/create-custom", tags=["系统"])
+async def create_table_custom(request: TableCreateRequest):
+    """使用自定义SQL创建物理表"""
+    try:
+        from urllib.parse import quote_plus
+        
+        db_url = None
+        
+        if request.url:
+            db_url = request.url
+            if db_url.startswith("jdbc:mysql://"):
+                db_url = db_url.replace("jdbc:mysql://", "mysql+pymysql://")
+            elif db_url.startswith("jdbc:clickhouse://"):
+                pass
+            
+            if request.username and request.password and '@' not in db_url:
+                prefix = "mysql+pymysql://"
+                if db_url.startswith(prefix):
+                    rest = db_url[len(prefix):]
+                    encoded_user = quote_plus(request.username)
+                    encoded_password = quote_plus(request.password)
+                    db_url = f"{prefix}{encoded_user}:{encoded_password}@{rest}"
+        else:
+            raise HTTPException(status_code=400, detail="缺少数据库连接URL")
+        
+        engine = create_engine(db_url)
+        
+        create_sql = request.custom_sql if request.custom_sql else None
+        if not create_sql:
+            raise HTTPException(status_code=400, detail="缺少建表SQL")
+        
+        logger.info(f"Executing Custom Create Table SQL: {create_sql}")
+        
+        with engine.connect() as conn:
+            conn.execute(text(create_sql))
+            conn.commit()
+            
+        return {"status": "success", "message": f"表创建成功", "create_sql": create_sql}
+        
+    except Exception as e:
+        logger.error(f"创建表失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"创建表失败: {str(e)}")
+
+
+from schemas import (
     SqlJobSubmitRequest, JarJobSubmitRequest, JobSubmitResponse,
     ClusterStatus, JobInfo, JobDetail, SavepointRequest, ResumeJobRequest
 )
-from .flink_client import flink_client, FlinkClient
+from flink_client import flink_client, FlinkClient
 
 
 # ============ 健康检查 ============
@@ -418,13 +543,31 @@ async def get_job_history(limit: int = 50):
             # 如果作业在 Flink 中存在，使用 Flink 的实时信息更新
             if job_id in flink_job_map:
                 flink_info = flink_job_map[job_id]
-                # 更新状态
-                if flink_info.get("status") == "RUNNING":
-                    job["state"] = "RUNNING"
+                flink_status = flink_info.get("status")
+                
+                # 更新状态 - 使用Flink的实时状态
+                if flink_status in ["RUNNING", "FINISHED", "FAILED", "CANCELED", "RESTARTING"]:
+                    job["state"] = flink_status
+                    # 如果状态变为失败或取消，同时更新数据库
+                    if flink_status in ["FAILED", "CANCELED", "FINISHED"]:
+                        try:
+                            update_job_state(job_id, flink_status)
+                            logger.info(f"作业 {job_id} 状态已同步: {flink_status}")
+                        except Exception as e:
+                            logger.warning(f"更新作业 {job_id} 状态失败: {e}")
                 
                 # 如果数据库中没有 start_time，尝试从 Flink 信息中获取
                 if not job.get("start_time") and flink_info.get("start-time"):
                     job["start_time"] = flink_info.get("start-time")
+            else:
+                # 作业不在 Flink 中，但数据库状态是 RUNNING，说明作业已经失败或被清理
+                if job.get("state") == "RUNNING":
+                    job["state"] = "FAILED"
+                    try:
+                        update_job_state(job_id, "FAILED")
+                        logger.info(f"作业 {job_id} 不在 Flink 中，状态已更新为 FAILED")
+                    except Exception as e:
+                        logger.warning(f"更新作业 {job_id} 状态失败: {e}")
             
             resumed_from = job.get("resumed_from_job_id")
             job_state = job.get("state")
@@ -495,7 +638,7 @@ async def get_job_history(limit: int = 50):
 async def delete_history_job(job_id: str):
     """删除历史作业记录"""
     try:
-        from .db_operations import delete_job
+        from db_operations import delete_job
         success = delete_job(job_id)
         if success:
             logger.info(f"✅ 已删除作业记录: {job_id}")
@@ -603,7 +746,7 @@ async def restart_history_job(job_id: str, req: ResumeJobRequest):
             # 补救措施：如果还没获取到，尝试从 savepoints 表获取
             if not savepoint_timestamp and savepoint_path:
                 try:
-                    from .db_operations import db_manager, FlinkSavepoint
+                    from db_operations import db_manager, FlinkSavepoint
                     session = db_manager.get_session()
                     try:
                         sp_record = session.query(FlinkSavepoint).filter(
@@ -673,7 +816,7 @@ async def restart_history_job(job_id: str, req: ResumeJobRequest):
             # 如果是从 savepoint 启动，尝试记录 savepoint 使用情况
             if savepoint_path:
                 try:
-                    from .db_operations import save_savepoint
+                    from db_operations import save_savepoint
                     # 尝试从路径中提取 savepoint id，或者生成一个
                     sp_id = f"sp_{int(time.time())}"
                     save_savepoint(
@@ -855,7 +998,7 @@ async def get_jobs():
                      logger.info(f"同步 flink_job_name: {job_id} - {db_flink_name} -> {actual_flink_name}")
                      # 异步更新数据库（这里简单起见直接调用同步方法，因为是少量操作）
                      try:
-                         from .db_operations import save_job
+                         from db_operations import save_job
                          # 只更新 flink_job_name，其他保持不变
                          # 注意：这里需要传入 job_name，否则无法定位（如果按名称更新）或者会更新为空
                          # 由于 save_job 现在的逻辑比较复杂，我们最好只更新 job_id 对应的记录
@@ -1230,7 +1373,7 @@ async def restart_job(job_id: str, req: ResumeJobRequest):
                 else:
                     logger.warning(f"⚠️ SQL文件不存在: {sql_file_path}")
                     # 尝试根据作业名称查找其他作业的SQL
-                    from .db_operations import get_all_jobs
+                    from db_operations import get_all_jobs
                     all_jobs = get_all_jobs(limit=100)
                     for other_job in all_jobs:
                         if other_job.get("job_name") == original_job_name and other_job.get("sql_text"):
@@ -1538,7 +1681,7 @@ async def get_job_checkpoints(job_id: str):
 async def get_job_savepoints(job_id: str):
     """获取作业保存的Savepoints信息（从数据库）"""
     try:
-        from .db_operations import get_savepoints
+        from db_operations import get_savepoints
         return get_savepoints(job_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1637,7 +1780,7 @@ async def submit_sql_job(req: SqlJobSubmitRequest):
     优先使用 SQL Gateway，如果不支持则回退到 SQL Runner Jar
     作业提交后立即写入数据库，状态为 RUNNING
     """
-    from .config import SQL_RUNNER_JAR_ID, SQL_GATEWAY_URL
+    from config import SQL_RUNNER_JAR_ID, SQL_GATEWAY_URL
     import traceback
     import time
 
@@ -1774,7 +1917,7 @@ async def submit_sql_job(req: SqlJobSubmitRequest):
                 logger.info(f"✅ 获取到真正的 job_id: {job_id_new}，替换临时记录")
                 
                 try:
-                    from .db_operations import delete_job
+                    from db_operations import delete_job
                     delete_job(temp_job_id)
                     logger.info(f"已删除临时记录: {temp_job_id}")
                 except Exception as del_err:
@@ -2052,7 +2195,7 @@ async def test_datasource(request: DataSourceBase):
 async def get_datasource_tables_api(id: int):
     """获取数据源下的所有表"""
     try:
-        from .db_operations import get_datasource_tables
+        from db_operations import get_datasource_tables
         tables = get_datasource_tables(id)
         return {"tables": tables}
     except Exception as e:
@@ -2062,7 +2205,7 @@ async def get_datasource_tables_api(id: int):
 async def get_datasource_columns_api(id: int, table_name: str):
     """获取数据源下指定表的字段"""
     try:
-        from .db_operations import get_datasource_columns
+        from db_operations import get_datasource_columns
         columns = get_datasource_columns(id, table_name)
         return {"columns": columns}
     except Exception as e:

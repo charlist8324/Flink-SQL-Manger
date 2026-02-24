@@ -8,6 +8,8 @@
     <link rel="stylesheet" href="https://unpkg.com/element-plus@2.4.4/dist/index.css">
     <!-- Element Plus Icons -->
     <link rel="stylesheet" href="https://unpkg.com/element-plus@2.4.4/theme-chalk/index.css">
+    <!-- Element Plus Icons JS -->
+    <script src="https://unpkg.com/@element-plus/icons-vue@2.3.1"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body, #app { height: 100%; }
@@ -177,7 +179,7 @@
                             <span>集群监控</span>
                         </el-menu-item>
                         <el-menu-item index="datasources">
-                            <el-icon><DataLine /></el-icon>
+                            <el-icon><Monitor /></el-icon>
                             <span>数据源管理</span>
                         </el-menu-item>
                     </el-menu>
@@ -341,7 +343,7 @@
                                             <el-form :model="table" label-width="120px" size="small">
                                                 <el-row :gutter="20">
                                                     <el-col :span="12">
-                                                        <el-form-item label="表名">
+                                                        <el-form-item label="Flink表名">
                                                             <el-input v-model="table.tableName" placeholder="表名" @input="syncTableName(table, 'main')" />
                                                         </el-form-item>
                                                     </el-col>
@@ -412,7 +414,7 @@
                                                     </el-alert>
                                                     <el-form-item label="选择数据源">
                                                         <el-select v-model="table.datasourceId" placeholder="选择已保存的数据源" clearable @change="val => applyDatasource(table, val)" style="width: 100%">
-                                                            <el-option v-for="ds in datasources" :key="ds.id" :label="ds.name" :value="ds.id">
+                                                            <el-option v-for="ds in datasources.filter(ds => ds.type === 'mysql')" :key="ds.id" :label="ds.name" :value="ds.id">
                                                                 <span>{{ ds.name }}</span>
                                                                 <span style="float: right; color: #8492a6; font-size: 13px">{{ ds.type }}</span>
                                                             </el-option>
@@ -437,7 +439,7 @@
                                                             </el-form-item>
                                                         </el-col>
                                                         <el-col :span="12">
-                                                            <el-form-item label="表名">
+                                                            <el-form-item label="Flink表名">
                                                                 <el-input v-model="table.jdbcTable" placeholder="表名">
                                                                     <template #append>
                                                                         <el-button @click="openTableSelection(table)">选择</el-button>
@@ -494,7 +496,7 @@
                                                 <div v-if="table.connectorType === 'mysql-cdc'">
                                                     <el-form-item label="选择数据源">
                                                         <el-select v-model="table.datasourceId" placeholder="选择已保存的数据源" clearable @change="val => applyDatasource(table, val)" style="width: 100%">
-                                                            <el-option v-for="ds in datasources" :key="ds.id" :label="ds.name" :value="ds.id">
+                                                            <el-option v-for="ds in datasources.filter(ds => ds.type === 'mysql')" :key="ds.id" :label="ds.name" :value="ds.id">
                                                                 <span>{{ ds.name }}</span>
                                                                 <span style="float: right; color: #8492a6; font-size: 13px">{{ ds.type }}</span>
                                                             </el-option>
@@ -514,7 +516,7 @@
                                                     </el-row>
                                                     <el-row :gutter="20">
                                                         <el-col :span="12">
-                                                            <el-form-item label="表名">
+                                                            <el-form-item label="Source表名">
                                                                 <div style="display: flex; gap: 10px; width: 100%;">
                                                                     <div style="flex: 1;">
                                                                         <el-tooltip content="支持正则表达式，例如: inventory.* 匹配所有表，或 (table1|table2) 匹配指定表" placement="top">
@@ -547,14 +549,6 @@
                                                     </el-row>
                                                     <el-row :gutter="20">
                                                         <el-col :span="8">
-                                                            <el-form-item label="同步模式">
-                                                                <el-select v-model="table.cdcScanMode" placeholder="请选择">
-                                                                    <el-option label="全量 + 增量 (initial)" value="initial"></el-option>
-                                                                    <el-option label="仅增量 (latest-offset)" value="latest-offset"></el-option>
-                                                                </el-select>
-                                                            </el-form-item>
-                                                        </el-col>
-                                                        <el-col :span="8">
                                                             <el-form-item label="锁策略 (Locking Mode)">
                                                                 <el-select v-model="table.debeziumLockingMode" placeholder="请选择">
                                                                     <el-option label="无锁 (None)" value="none"></el-option>
@@ -568,13 +562,21 @@
                                                                 <el-switch v-model="table.cdcIncrementalSnapshot" active-text="开启" inactive-text="关闭" />
                                                             </el-form-item>
                                                         </el-col>
+                                                        <el-col :span="8">
+                                                            <el-form-item label="同步模式">
+                                                                <el-select v-model="table.cdcScanMode" placeholder="请选择">
+                                                                    <el-option label="全量 + 增量 (initial)" value="initial"></el-option>
+                                                                    <el-option label="仅增量 (latest-offset)" value="latest-offset"></el-option>
+                                                                </el-select>
+                                                            </el-form-item>
+                                                        </el-col>
                                                     </el-row>
                                                 </div>
 
                                                 <div v-if="table.connectorType === 'oracle-cdc'">
                                                     <el-form-item label="选择数据源">
                                                         <el-select v-model="table.datasourceId" placeholder="选择已保存的数据源" clearable @change="val => applyDatasource(table, val)" style="width: 100%">
-                                                            <el-option v-for="ds in datasources" :key="ds.id" :label="ds.name" :value="ds.id">
+                                                            <el-option v-for="ds in datasources.filter(ds => ds.type === 'oracle')" :key="ds.id" :label="ds.name" :value="ds.id">
                                                                 <span>{{ ds.name }}</span>
                                                                 <span style="float: right; color: #8492a6; font-size: 13px">{{ ds.type }}</span>
                                                             </el-option>
@@ -594,8 +596,8 @@
                                                     </el-row>
                                                     <el-row :gutter="20">
                                                         <el-col :span="12">
-                                                            <el-form-item label="表名">
-                                                                <el-input v-model="table.oracleTable" placeholder="schema.table" />
+                                                            <el-form-item label="Source表名">
+                                                                <el-input v-model="table.oracleTable" placeholder="schema.table" @input="syncTableName(table, 'sub')" />
                                                             </el-form-item>
                                                         </el-col>
                                                         <el-col :span="12">
@@ -636,8 +638,8 @@
                                                     </el-row>
                                                     <el-row :gutter="20">
                                                         <el-col :span="12">
-                                                            <el-form-item label="表名">
-                                                                <el-input v-model="table.sqlserverTable" placeholder="schema.table" />
+                                                            <el-form-item label="Source表名">
+                                                                <el-input v-model="table.sqlserverTable" placeholder="schema.table" @input="syncTableName(table, 'sub')" />
                                                             </el-form-item>
                                                         </el-col>
                                                         <el-col :span="12">
@@ -719,8 +721,8 @@
                                                             </el-form-item>
                                                         </el-col>
                                                         <el-col :span="12">
-                                                            <el-form-item label="表名">
-                                                                <el-input v-model="table.oceanbaseTable" placeholder="表名" />
+                                                            <el-form-item label="Source表名">
+                                                                <el-input v-model="table.oceanbaseTable" placeholder="表名" @input="syncTableName(table, 'sub')" />
                                                             </el-form-item>
                                                         </el-col>
                                                     </el-row>
@@ -753,8 +755,8 @@
                                                     </el-row>
                                                     <el-row :gutter="20">
                                                         <el-col :span="12">
-                                                            <el-form-item label="表名">
-                                                                <el-input v-model="table.dorisTable" placeholder="表名" />
+                                                            <el-form-item label="Source表名">
+                                                                <el-input v-model="table.dorisTable" placeholder="表名" @input="syncTableName(table, 'sub')" />
                                                             </el-form-item>
                                                         </el-col>
                                                         <el-col :span="12">
@@ -787,8 +789,8 @@
                                                     </el-row>
                                                     <el-row :gutter="20">
                                                         <el-col :span="12">
-                                                            <el-form-item label="表名">
-                                                                <el-input v-model="table.starrocksTable" placeholder="表名" />
+                                                            <el-form-item label="Source表名">
+                                                                <el-input v-model="table.starrocksTable" placeholder="表名" @input="syncTableName(table, 'sub')" />
                                                             </el-form-item>
                                                         </el-col>
                                                         <el-col :span="12">
@@ -854,7 +856,383 @@
                                         <div v-if="table.connectorType === 'starrocks'">
                                             <el-form-item label="选择数据源">
                                                 <el-select v-model="table.datasourceId" placeholder="选择已保存的数据源" clearable @change="val => applyDatasource(table, val)" style="width: 100%">
-                                                    <el-option v-for="ds in datasources" :key="ds.id" :label="ds.name" :value="ds.id">
+                                                    <el-option v-for="ds in datasources.filter(ds => ds.type === 'oceanbase')" :key="ds.id" :label="ds.name" :value="ds.id">
+                                                                <span>{{ ds.name }}</span>
+                                                                <span style="float: right; color: #8492a6; font-size: 13px">{{ ds.type }}</span>
+                                                            </el-option>
+                                                </el-select>
+                                            </el-form-item>
+                                            <el-row :gutter="20">
+                                                <el-col :span="12">
+                                                    <el-form-item label="FE 地址">
+                                                        <el-input v-model="table.starrocksUrl" placeholder="jdbc:mysql://localhost:9030/db" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="12">
+                                                    <el-form-item label="驱动类">
+                                                        <el-input v-model="table.starrocksDriver" placeholder="com.mysql.cj.jdbc.Driver" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            <el-row :gutter="20">
+                                                <el-col :span="12">
+                                                    <el-form-item label="Target表名">
+                                                        <el-input v-model="table.starrocksTable" placeholder="表名" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="12">
+                                                    <el-form-item label="用户名">
+                                                        <el-input v-model="table.starrocksUsername" placeholder="用户名" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            <el-row :gutter="20">
+                                                <el-col :span="12">
+                                                    <el-form-item label="密码">
+                                                        <el-input v-model="table.starrocksPassword" type="password" placeholder="密码" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="12">
+                                                    <el-form-item label="写入模式">
+                                                        <el-select v-model="table.starrocksWriteMode" placeholder="选择模式">
+                                                            <el-option label="Append" value="append" />
+                                                            <el-option label="Insert into" value="insert" />
+                                                            <el-option label="Upsert" value="upsert" />
+                                                        </el-select>
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            
+                                            <!-- 自动建表配置 -->
+                                            <el-divider content-position="left">自动建表配置</el-divider>
+                                            <el-row :gutter="20">
+                                                <el-col :span="8">
+                                                    <el-form-item label="启用自动建表">
+                                                        <el-switch v-model="table.autoCreateTable" :active-value="true" :inactive-value="false" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="建表类型">
+                                                        <select v-model="table.tableType" class="native-select" style="width: 100%">
+                                                            <option value="UNIQUE">主键表(UNIQUE)</option>
+                                                            <option value="AGGREGATE">聚合表(AGGREGATE)</option>
+                                                            <option value="DUPLICATE">明细(DUPLICATE)</option>
+                                                        </select>
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="副本数量">
+                                                        <el-input-number v-model="table.replicationNum" :min="1" :max="10" style="width: 100%" :default-value="1" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="Buckets 数量">
+                                                        <el-input-number v-model="table.dorisBuckets" :min="1" :max="128" style="width: 100%" :default-value="10" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            
+                                            <!-- StarRocks Stream Load 攒批配置 -->
+                                            <el-divider content-position="left">Stream Load 攒批配置</el-divider>
+                                            <el-row :gutter="20">
+                                                <el-col :span="8">
+                                                    <el-form-item label="启用攒批">
+                                                        <el-switch v-model="table.enableBatchWrite" :active-value="true" :inactive-value="false" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8" v-if="table.enableBatchWrite">
+                                                    <el-form-item label="批次大小">
+                                                        <el-input-number v-model="table.batchSize" :min="100" :max="100000" :step="100" style="width: 100%" :default-value="10000" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8" v-if="table.enableBatchWrite">
+                                                    <el-form-item label="Flush间隔(ms)">
+                                                        <el-input-number v-model="table.flushInterval" :min="1000" :max="300000" :step="1000" style="width: 100%" :default-value="30000" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            <el-row :gutter="20" v-if="table.enableBatchWrite">
+                                                <el-col :span="8">
+                                                    <el-form-item label="最大重试次数">
+                                                        <el-input-number v-model="table.maxRetries" :min="0" :max="10" style="width: 100%" :default-value="3" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="重试间隔(ms)">
+                                                        <el-input-number v-model="table.retryInterval" :min="1000" :max="60000" :step="1000" style="width: 100%" :default-value="10000" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="写入方式">
+                                                        <select v-model="table.writeMode" class="native-select" style="width: 100%">
+                                                            <option value="stream_load">Stream Load</option>
+                                                            <option value="jdbc">JDBC</option>
+                                                        </select>
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                        </div>
+
+                                        <div v-if="table.connectorType === 'clickhouse'">
+                                            <el-row :gutter="20">
+                                                <el-col :span="12">
+                                                    <el-form-item label="ClickHouse 地址">
+                                                        <el-input v-model="table.clickhouseUrl" placeholder="jdbc:clickhouse://localhost:8123/db" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="12">
+                                                    <el-form-item label="驱动类">
+                                                        <el-input v-model="table.clickhouseDriver" placeholder="com.clickhouse.jdbc.ClickHouseDriver" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            <el-row :gutter="20">
+                                                <el-col :span="12">
+                                                    <el-form-item label="Target表名">
+                                                        <el-input v-model="table.clickhouseTable" placeholder="表名" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="12">
+                                                    <el-form-item label="用户名">
+                                                        <el-input v-model="table.clickhouseUsername" placeholder="用户名" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            <el-row :gutter="20">
+                                                <el-col :span="12">
+                                                    <el-form-item label="密码">
+                                                        <el-input v-model="table.clickhousePassword" type="password" placeholder="密码" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="12">
+                                                    <el-form-item label="写入模式">
+                                                        <el-select v-model="table.clickhouseWriteMode" placeholder="选择模式">
+                                                            <el-option label="Insert" value="insert" />
+                                                            <el-option label="Async Insert" value="async_insert" />
+                                                        </el-select>
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                        </div>
+
+                                        <div v-if="table.connectorType === 'doris'">
+                                            <el-row :gutter="20">
+                                                <el-col :span="12">
+                                                    <el-form-item label="FE 地址">
+                                                        <el-input v-model="table.dorisUrl" placeholder="jdbc:mysql://localhost:9030/db" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="12">
+                                                    <el-form-item label="驱动类">
+                                                        <el-input v-model="table.dorisDriver" placeholder="com.mysql.cj.jdbc.Driver" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            <el-row :gutter="20">
+                                                <el-col :span="12">
+                                                    <el-form-item label="Target表名">
+                                                        <el-input v-model="table.dorisTable" placeholder="表名" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="12">
+                                                    <el-form-item label="用户名">
+                                                        <el-input v-model="table.dorisUsername" placeholder="用户名" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            <el-row :gutter="20">
+                                                <el-col :span="12">
+                                                    <el-form-item label="密码">
+                                                        <el-input v-model="table.dorisPassword" type="password" placeholder="密码" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            
+                                            <!-- Doris 自动建表配置 -->
+                                            <el-divider content-position="left">自动建表配置</el-divider>
+                                            <el-row :gutter="20">
+                                                <el-col :span="8">
+                                                    <el-form-item label="启用自动建表">
+                                                        <el-switch v-model="table.autoCreateTable" :active-value="true" :inactive-value="false" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="建表类型">
+                                                        <select v-model="table.tableType" class="native-select" style="width: 100%">
+                                                            <option value="UNIQUE">主键表(UNIQUE)</option>
+                                                            <option value="AGGREGATE">聚合表(AGGREGATE)</option>
+                                                            <option value="DUPLICATE">明细(DUPLICATE)</option>
+                                                        </select>
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="副本数量">
+                                                        <el-input-number v-model="table.replicationNum" :min="1" :max="10" style="width: 100%" :default-value="1" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="Buckets 数量">
+                                                        <el-input-number v-model="table.dorisBuckets" :min="1" :max="128" style="width: 100%" :default-value="10" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            
+                                            <!-- Doris Stream Load 攒批配置 -->
+                                            <el-divider content-position="left">Stream Load 攒批配置</el-divider>
+                                            <el-row :gutter="20">
+                                                <el-col :span="8">
+                                                    <el-form-item label="启用攒批">
+                                                        <el-switch v-model="table.enableBatchWrite" :active-value="true" :inactive-value="false" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8" v-if="table.enableBatchWrite">
+                                                    <el-form-item label="批次大小">
+                                                        <el-input-number v-model="table.batchSize" :min="100" :max="100000" :step="100" style="width: 100%" :default-value="10000" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8" v-if="table.enableBatchWrite">
+                                                    <el-form-item label="Flush间隔(ms)">
+                                                        <el-input-number v-model="table.flushInterval" :min="1000" :max="300000" :step="1000" style="width: 100%" :default-value="30000" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            <el-row :gutter="20" v-if="table.enableBatchWrite">
+                                                <el-col :span="8">
+                                                    <el-form-item label="最大重试次数">
+                                                        <el-input-number v-model="table.maxRetries" :min="0" :max="10" style="width: 100%" :default-value="3" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="重试间隔(ms)">
+                                                        <el-input-number v-model="table.retryInterval" :min="1000" :max="60000" :step="1000" style="width: 100%" :default-value="10000" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="写入方式">
+                                                        <select v-model="table.writeMode" class="native-select" style="width: 100%">
+                                                            <option value="stream_load">Stream Load</option>
+                                                            <option value="jdbc">JDBC</option>
+                                                        </select>
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                        </div>
+
+                                        <div v-if="table.connectorType === 'doris'">
+                                            <el-form-item label="选择数据源">
+                                                <el-select v-model="table.datasourceId" placeholder="选择已保存的数据源" clearable @change="val => applyDatasource(table, val)" style="width: 100%">
+                                                    <el-option v-for="ds in datasources.filter(ds => ds.type === 'doris')" :key="ds.id" :label="ds.name" :value="ds.id">
+                                                        <span>{{ ds.name }}</span>
+                                                        <span style="float: right; color: #8492a6; font-size: 13px">{{ ds.type }}</span>
+                                                    </el-option>
+                                                </el-select>
+                                            </el-form-item>
+                                            <el-row :gutter="20">
+                                                <el-col :span="12">
+                                                    <el-form-item label="FE 地址">
+                                                        <el-input v-model="table.dorisUrl" placeholder="jdbc:mysql://localhost:9030/db" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="12">
+                                                    <el-form-item label="驱动类">
+                                                        <el-input v-model="table.dorisDriver" placeholder="com.mysql.cj.jdbc.Driver" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            <el-row :gutter="20">
+                                                <el-col :span="12">
+                                                    <el-form-item label="表名">
+                                                        <el-input v-model="table.dorisTable" placeholder="表名" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="12">
+                                                    <el-form-item label="用户名">
+                                                        <el-input v-model="table.dorisUsername" placeholder="用户名" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            <el-row :gutter="20">
+                                                <el-col :span="12">
+                                                    <el-form-item label="密码">
+                                                        <el-input v-model="table.dorisPassword" type="password" placeholder="密码" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            
+                                            <!-- 自动建表配置 -->
+                                            <el-divider content-position="left">自动建表配置</el-divider>
+                                            <el-row :gutter="20">
+                                                <el-col :span="8">
+                                                    <el-form-item label="启用自动建表">
+                                                        <el-switch v-model="table.autoCreateTable" :active-value="true" :inactive-value="false" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="建表类型">
+                                                        <select v-model="table.tableType" class="native-select" style="width: 100%">
+                                                            <option value="UNIQUE">主键表(UNIQUE)</option>
+                                                            <option value="AGGREGATE">聚合表(AGGREGATE)</option>
+                                                            <option value="DUPLICATE">明细(DUPLICATE)</option>
+                                                        </select>
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="副本数量">
+                                                        <el-input-number v-model="table.replicationNum" :min="1" :max="10" style="width: 100%" :default-value="1" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="Buckets 数量">
+                                                        <el-input-number v-model="table.dorisBuckets" :min="1" :max="128" style="width: 100%" :default-value="10" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            
+                                            <!-- Doris Stream Load 攒批配置 -->
+                                            <el-divider content-position="left">Stream Load 攒批配置</el-divider>
+                                            <el-row :gutter="20">
+                                                <el-col :span="8">
+                                                    <el-form-item label="启用攒批">
+                                                        <el-switch v-model="table.enableBatchWrite" :active-value="true" :inactive-value="false" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8" v-if="table.enableBatchWrite">
+                                                    <el-form-item label="批次大小">
+                                                        <el-input-number v-model="table.batchSize" :min="100" :max="100000" :step="100" style="width: 100%" :default-value="10000" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8" v-if="table.enableBatchWrite">
+                                                    <el-form-item label="Flush间隔(ms)">
+                                                        <el-input-number v-model="table.flushInterval" :min="1000" :max="300000" :step="1000" style="width: 100%" :default-value="30000" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            <el-row :gutter="20" v-if="table.enableBatchWrite">
+                                                <el-col :span="8">
+                                                    <el-form-item label="最大重试次数">
+                                                        <el-input-number v-model="table.maxRetries" :min="0" :max="10" style="width: 100%" :default-value="3" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="重试间隔(ms)">
+                                                        <el-input-number v-model="table.retryInterval" :min="1000" :max="60000" :step="1000" style="width: 100%" :default-value="10000" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="写入方式">
+                                                        <select v-model="table.writeMode" class="native-select" style="width: 100%">
+                                                            <option value="stream_load">Stream Load</option>
+                                                            <option value="jdbc">JDBC</option>
+                                                        </select>
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                        </div>
+
+                                        <div v-if="table.connectorType === 'starrocks'">
+                                            <el-form-item label="选择数据源">
+                                                <el-select v-model="table.datasourceId" placeholder="选择已保存的数据源" clearable @change="val => applyDatasource(table, val)" style="width: 100%">
+                                                    <el-option v-for="ds in datasources.filter(ds => ds.type === 'starrocks')" :key="ds.id" :label="ds.name" :value="ds.id">
                                                         <span>{{ ds.name }}</span>
                                                         <span style="float: right; color: #8492a6; font-size: 13px">{{ ds.type }}</span>
                                                     </el-option>
@@ -900,51 +1278,86 @@
                                                     </el-form-item>
                                                 </el-col>
                                             </el-row>
-                                        </div>
-
-                                        <div v-if="table.connectorType === 'clickhouse'">
+                                            
+                                            <!-- 自动建表配置 -->
+                                            <el-divider content-position="left">自动建表配置</el-divider>
                                             <el-row :gutter="20">
-                                                <el-col :span="12">
-                                                    <el-form-item label="ClickHouse 地址">
-                                                        <el-input v-model="table.clickhouseUrl" placeholder="jdbc:clickhouse://localhost:8123/db" />
+                                                <el-col :span="8">
+                                                    <el-form-item label="启用自动建表">
+                                                        <el-switch v-model="table.autoCreateTable" :active-value="true" :inactive-value="false" />
                                                     </el-form-item>
                                                 </el-col>
-                                                <el-col :span="12">
-                                                    <el-form-item label="驱动类">
-                                                        <el-input v-model="table.clickhouseDriver" placeholder="com.clickhouse.jdbc.ClickHouseDriver" />
+                                                <el-col :span="8">
+                                                    <el-form-item label="建表类型">
+                                                        <select v-model="table.tableType" class="native-select" style="width: 100%">
+                                                            <option value="UNIQUE">主键表(UNIQUE)</option>
+                                                            <option value="AGGREGATE">聚合表(AGGREGATE)</option>
+                                                            <option value="DUPLICATE">明细(DUPLICATE)</option>
+                                                        </select>
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="副本数量">
+                                                        <el-input-number v-model="table.replicationNum" :min="1" :max="10" style="width: 100%" :default-value="3" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="Buckets 数量">
+                                                        <el-input-number v-model="table.dorisBuckets" :min="1" :max="128" style="width: 100%" :default-value="10" />
                                                     </el-form-item>
                                                 </el-col>
                                             </el-row>
+                                            
+                                            <!-- StarRocks Stream Load 攒批配置 -->
+                                            <el-divider content-position="left">Stream Load 攒批配置</el-divider>
                                             <el-row :gutter="20">
-                                                <el-col :span="12">
-                                                    <el-form-item label="表名">
-                                                        <el-input v-model="table.clickhouseTable" placeholder="表名" />
+                                                <el-col :span="8">
+                                                    <el-form-item label="启用攒批">
+                                                        <el-switch v-model="table.enableBatchWrite" :active-value="true" :inactive-value="false" />
                                                     </el-form-item>
                                                 </el-col>
-                                                <el-col :span="12">
-                                                    <el-form-item label="用户名">
-                                                        <el-input v-model="table.clickhouseUsername" placeholder="用户名" />
+                                                <el-col :span="8" v-if="table.enableBatchWrite">
+                                                    <el-form-item label="批次大小">
+                                                        <el-input-number v-model="table.batchSize" :min="100" :max="100000" :step="100" style="width: 100%" :default-value="10000" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8" v-if="table.enableBatchWrite">
+                                                    <el-form-item label="Flush间隔(ms)">
+                                                        <el-input-number v-model="table.flushInterval" :min="1000" :max="300000" :step="1000" style="width: 100%" :default-value="30000" />
                                                     </el-form-item>
                                                 </el-col>
                                             </el-row>
-                                            <el-row :gutter="20">
-                                                <el-col :span="12">
-                                                    <el-form-item label="密码">
-                                                        <el-input v-model="table.clickhousePassword" type="password" placeholder="密码" />
+                                            <el-row :gutter="20" v-if="table.enableBatchWrite">
+                                                <el-col :span="8">
+                                                    <el-form-item label="最大重试次数">
+                                                        <el-input-number v-model="table.maxRetries" :min="0" :max="10" style="width: 100%" :default-value="3" />
                                                     </el-form-item>
                                                 </el-col>
-                                                <el-col :span="12">
-                                                    <el-form-item label="写入模式">
-                                                        <el-select v-model="table.clickhouseWriteMode" placeholder="选择模式">
-                                                            <el-option label="Insert" value="insert" />
-                                                            <el-option label="Async Insert" value="async_insert" />
-                                                        </el-select>
+                                                <el-col :span="8">
+                                                    <el-form-item label="重试间隔(ms)">
+                                                        <el-input-number v-model="table.retryInterval" :min="1000" :max="60000" :step="1000" style="width: 100%" :default-value="10000" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="写入方式">
+                                                        <select v-model="table.writeMode" class="native-select" style="width: 100%">
+                                                            <option value="stream_load">Stream Load</option>
+                                                            <option value="jdbc">JDBC</option>
+                                                        </select>
                                                     </el-form-item>
                                                 </el-col>
                                             </el-row>
                                         </div>
 
                                         <div v-if="table.connectorType === 'doris'">
+                                            <el-form-item label="选择数据源">
+                                                <el-select v-model="table.datasourceId" placeholder="选择已保存的数据源" clearable @change="val => applyDatasource(table, val)" style="width: 100%">
+                                                    <el-option v-for="ds in datasources.filter(ds => ds.type === 'doris')" :key="ds.id" :label="ds.name" :value="ds.id">
+                                                        <span>{{ ds.name }}</span>
+                                                        <span style="float: right; color: #8492a6; font-size: 13px">{{ ds.type }}</span>
+                                                    </el-option>
+                                                </el-select>
+                                            </el-form-item>
                                             <el-row :gutter="20">
                                                 <el-col :span="12">
                                                     <el-form-item label="FE 地址">
@@ -973,6 +1386,161 @@
                                                 <el-col :span="12">
                                                     <el-form-item label="密码">
                                                         <el-input v-model="table.dorisPassword" type="password" placeholder="密码" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            
+                                            <!-- 自动建表配置 -->
+                                            <el-divider content-position="left">自动建表配置</el-divider>
+                                            <el-row :gutter="20">
+                                                <el-col :span="8">
+                                                    <el-form-item label="启用自动建表">
+                                                        <el-switch v-model="table.autoCreateTable" :active-value="true" :inactive-value="false" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8" v-if="table.autoCreateTable">
+                                                    <el-form-item label="建表类型">
+                                                        <select v-model="table.tableType" class="native-select" style="width: 100%">
+                                                            <option value="UNIQUE">主键表(UNIQUE)</option>
+                                                            <option value="AGGREGATE">聚合表(AGGREGATE)</option>
+                                                            <option value="DUPLICATE">明细(DUPLICATE)</option>
+                                                        </select>
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8" v-if="table.autoCreateTable">
+                                                    <el-form-item label="副本数量">
+                                                        <el-input-number v-model="table.replicationNum" :min="1" :max="10" style="width: 100%" :default-value="3" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            
+                                            <!-- Doris Stream Load 攒批配置 -->
+                                            <el-divider content-position="left">Stream Load 攒批配置</el-divider>
+                                            <el-row :gutter="20">
+                                                <el-col :span="8">
+                                                    <el-form-item label="启用攒批">
+                                                        <el-switch v-model="table.enableBatchWrite" :active-value="true" :inactive-value="false" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8" v-if="table.enableBatchWrite">
+                                                    <el-form-item label="批次大小">
+                                                        <el-input-number v-model="table.batchSize" :min="100" :max="100000" :step="100" style="width: 100%" :default-value="10000" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8" v-if="table.enableBatchWrite">
+                                                    <el-form-item label="Flush间隔(ms)">
+                                                        <el-input-number v-model="table.flushInterval" :min="1000" :max="300000" :step="1000" style="width: 100%" :default-value="30000" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            <el-row :gutter="20" v-if="table.enableBatchWrite">
+                                                <el-col :span="8">
+                                                    <el-form-item label="最大重试次数">
+                                                        <el-input-number v-model="table.maxRetries" :min="0" :max="10" style="width: 100%" :default-value="3" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="重试间隔(ms)">
+                                                        <el-input-number v-model="table.retryInterval" :min="1000" :max="60000" :step="1000" style="width: 100%" :default-value="10000" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="写入方式">
+                                                        <select v-model="table.writeMode" class="native-select" style="width: 100%">
+                                                            <option value="stream_load">Stream Load</option>
+                                                            <option value="jdbc">JDBC</option>
+                                                        </select>
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                        </div>
+
+                                        <div v-if="table.connectorType === 'starrocks'">
+                                            <el-form-item label="选择数据源">
+                                                <el-select v-model="table.datasourceId" placeholder="选择已保存的数据源" clearable @change="val => applyDatasource(table, val)" style="width: 100%">
+                                                    <el-option v-for="ds in datasources.filter(ds => ds.type === 'starrocks')" :key="ds.id" :label="ds.name" :value="ds.id">
+                                                        <span>{{ ds.name }}</span>
+                                                        <span style="float: right; color: #8492a6; font-size: 13px">{{ ds.type }}</span>
+                                                    </el-option>
+                                                </el-select>
+                                            </el-form-item>
+                                            <el-row :gutter="20">
+                                                <el-col :span="12">
+                                                    <el-form-item label="FE 地址">
+                                                        <el-input v-model="table.starrocksUrl" placeholder="jdbc:mysql://localhost:9030/db" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="12">
+                                                    <el-form-item label="驱动类">
+                                                        <el-input v-model="table.starrocksDriver" placeholder="com.mysql.cj.jdbc.Driver" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            <el-row :gutter="20">
+                                                <el-col :span="12">
+                                                    <el-form-item label="表名">
+                                                        <el-input v-model="table.starrocksTable" placeholder="表名" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="12">
+                                                    <el-form-item label="用户名">
+                                                        <el-input v-model="table.starrocksUsername" placeholder="用户名" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            <el-row :gutter="20">
+                                                <el-col :span="12">
+                                                    <el-form-item label="密码">
+                                                        <el-input v-model="table.starrocksPassword" type="password" placeholder="密码" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="12">
+                                                    <el-form-item label="写入模式">
+                                                        <el-select v-model="table.starrocksWriteMode" placeholder="选择模式">
+                                                            <el-option label="Append" value="append" />
+                                                            <el-option label="Insert into" value="insert" />
+                                                            <el-option label="Upsert" value="upsert" />
+                                                        </el-select>
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            
+                                            <!-- StarRocks Stream Load 攒批配置 -->
+                                            <el-divider content-position="left">Stream Load 攒批配置</el-divider>
+                                            <el-row :gutter="20">
+                                                <el-col :span="8">
+                                                    <el-form-item label="启用攒批">
+                                                        <el-switch v-model="table.enableBatchWrite" :active-value="true" :inactive-value="false" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8" v-if="table.enableBatchWrite">
+                                                    <el-form-item label="批次大小">
+                                                        <el-input-number v-model="table.batchSize" :min="100" :max="100000" :step="100" style="width: 100%" :default-value="10000" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8" v-if="table.enableBatchWrite">
+                                                    <el-form-item label="Flush间隔(ms)">
+                                                        <el-input-number v-model="table.flushInterval" :min="1000" :max="300000" :step="1000" style="width: 100%" :default-value="30000" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            <el-row :gutter="20" v-if="table.enableBatchWrite">
+                                                <el-col :span="8">
+                                                    <el-form-item label="最大重试次数">
+                                                        <el-input-number v-model="table.maxRetries" :min="0" :max="10" style="width: 100%" :default-value="3" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="重试间隔(ms)">
+                                                        <el-input-number v-model="table.retryInterval" :min="1000" :max="60000" :step="1000" style="width: 100%" :default-value="10000" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="写入方式">
+                                                        <select v-model="table.writeMode" class="native-select" style="width: 100%">
+                                                            <option value="stream_load">Stream Load</option>
+                                                            <option value="jdbc">JDBC</option>
+                                                        </select>
                                                     </el-form-item>
                                                 </el-col>
                                             </el-row>
@@ -1160,8 +1728,8 @@
                                     <el-form :model="table" label-width="120px" size="small">
                                         <el-row :gutter="20">
                                             <el-col :span="12">
-                                                <el-form-item label="表名">
-                                                    <el-input v-model="table.tableName" placeholder="表名">
+                                                <el-form-item label="Flink表名">
+                                                    <el-input v-model="table.tableName" placeholder="表名" @input="onSinkLogicalTableInput(table, $event)">
                                                         <template #append>
                                                             <el-checkbox v-model="table.autoCreateTable" label="自动建表" style="margin-right: 0;" title="如果表不存在，尝试自动创建物理表（仅支持JDBC/StarRocks/Doris）" />
                                                         </template>
@@ -1210,7 +1778,7 @@
                                         <div v-if="table.connectorType === 'jdbc' || table.connectorType === 'jdbc-upsert'">
                                             <el-form-item label="选择数据源">
                                                 <el-select v-model="table.datasourceId" placeholder="选择已保存的数据源" clearable @change="val => applyDatasource(table, val)" style="width: 100%">
-                                                    <el-option v-for="ds in datasources" :key="ds.id" :label="ds.name" :value="ds.id">
+                                                    <el-option v-for="ds in datasources.filter(ds => ['mysql', 'postgresql', 'oracle', 'sqlserver', 'oceanbase', 'clickhouse'].includes(ds.type))" :key="ds.id" :label="ds.name" :value="ds.id">
                                                         <span>{{ ds.name }}</span>
                                                         <span style="float: right; color: #8492a6; font-size: 13px">{{ ds.type }}</span>
                                                     </el-option>
@@ -1230,7 +1798,7 @@
                                             </el-row>
                                             <el-row :gutter="20">
                                                 <el-col :span="12">
-                                                    <el-form-item label="表名">
+                                                    <el-form-item label="Target表名">
                                                         <el-input v-model="table.jdbcTable" placeholder="表名" />
                                                     </el-form-item>
                                                 </el-col>
@@ -1244,6 +1812,179 @@
                                                 <el-col :span="12">
                                                     <el-form-item label="密码">
                                                         <el-input v-model="table.jdbcPassword" type="password" placeholder="密码" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                        </div>
+
+                                        <div v-if="table.connectorType === 'doris'">
+                                            <el-form-item label="选择数据源">
+                                                <el-select v-model="table.datasourceId" placeholder="选择已保存的数据源" clearable @change="val => applyDatasource(table, val)" style="width: 100%">
+                                                    <el-option v-for="ds in datasources.filter(ds => ds.type === 'doris')" :key="ds.id" :label="ds.name" :value="ds.id">
+                                                        <span>{{ ds.name }}</span>
+                                                        <span style="float: right; color: #8492a6; font-size: 13px">{{ ds.type }}</span>
+                                                    </el-option>
+                                                </el-select>
+                                            </el-form-item>
+                                            <el-row :gutter="20">
+                                                <el-col :span="12">
+                                                    <el-form-item label="FE 地址">
+                                                        <el-input v-model="table.dorisUrl" placeholder="jdbc:mysql://localhost:9030/db" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="12">
+                                                    <el-form-item label="驱动类">
+                                                        <el-input v-model="table.dorisDriver" placeholder="com.mysql.cj.jdbc.Driver" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            <el-row :gutter="20">
+                                                <el-col :span="12">
+                                                    <el-form-item label="表名">
+                                                        <el-input v-model="table.dorisTable" placeholder="表名" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="12">
+                                                    <el-form-item label="用户名">
+                                                        <el-input v-model="table.dorisUsername" placeholder="用户名" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            <el-row :gutter="20">
+                                                <el-col :span="12">
+                                                    <el-form-item label="密码">
+                                                        <el-input v-model="table.dorisPassword" type="password" placeholder="密码" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            
+                                            <!-- Doris Stream Load 攒批配置 -->
+                                            <el-divider content-position="left">Stream Load 攒批配置</el-divider>
+                                            <el-row :gutter="20">
+                                                <el-col :span="8">
+                                                    <el-form-item label="启用攒批">
+                                                        <el-switch v-model="table.enableBatchWrite" :active-value="true" :inactive-value="false" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8" v-if="table.enableBatchWrite">
+                                                    <el-form-item label="批次大小">
+                                                        <el-input-number v-model="table.batchSize" :min="100" :max="100000" :step="100" style="width: 100%" :default-value="10000" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8" v-if="table.enableBatchWrite">
+                                                    <el-form-item label="Flush间隔(ms)">
+                                                        <el-input-number v-model="table.flushInterval" :min="1000" :max="300000" :step="1000" style="width: 100%" :default-value="30000" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            <el-row :gutter="20" v-if="table.enableBatchWrite">
+                                                <el-col :span="8">
+                                                    <el-form-item label="最大重试次数">
+                                                        <el-input-number v-model="table.maxRetries" :min="0" :max="10" style="width: 100%" :default-value="3" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="重试间隔(ms)">
+                                                        <el-input-number v-model="table.retryInterval" :min="1000" :max="60000" :step="1000" style="width: 100%" :default-value="10000" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="写入方式">
+                                                        <select v-model="table.writeMode" class="native-select" style="width: 100%">
+                                                            <option value="stream_load">Stream Load</option>
+                                                            <option value="jdbc">JDBC</option>
+                                                        </select>
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                        </div>
+
+                                        <div v-if="table.connectorType === 'starrocks'">
+                                            <el-form-item label="选择数据源">
+                                                <el-select v-model="table.datasourceId" placeholder="选择已保存的数据源" clearable @change="val => applyDatasource(table, val)" style="width: 100%">
+                                                    <el-option v-for="ds in datasources.filter(ds => ds.type === 'starrocks')" :key="ds.id" :label="ds.name" :value="ds.id">
+                                                        <span>{{ ds.name }}</span>
+                                                        <span style="float: right; color: #8492a6; font-size: 13px">{{ ds.type }}</span>
+                                                    </el-option>
+                                                </el-select>
+                                            </el-form-item>
+                                            <el-row :gutter="20">
+                                                <el-col :span="12">
+                                                    <el-form-item label="FE 地址">
+                                                        <el-input v-model="table.starrocksUrl" placeholder="jdbc:mysql://localhost:9030/db" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="12">
+                                                    <el-form-item label="驱动类">
+                                                        <el-input v-model="table.starrocksDriver" placeholder="com.mysql.cj.jdbc.Driver" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            <el-row :gutter="20">
+                                                <el-col :span="12">
+                                                    <el-form-item label="表名">
+                                                        <el-input v-model="table.starrocksTable" placeholder="表名" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="12">
+                                                    <el-form-item label="用户名">
+                                                        <el-input v-model="table.starrocksUsername" placeholder="用户名" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            <el-row :gutter="20">
+                                                <el-col :span="12">
+                                                    <el-form-item label="密码">
+                                                        <el-input v-model="table.starrocksPassword" type="password" placeholder="密码" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="12">
+                                                    <el-form-item label="写入模式">
+                                                        <el-select v-model="table.starrocksWriteMode" placeholder="选择模式">
+                                                            <el-option label="Append" value="append" />
+                                                            <el-option label="Insert into" value="insert" />
+                                                            <el-option label="Upsert" value="upsert" />
+                                                        </el-select>
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            
+                                            <!-- StarRocks Stream Load 攒批配置 -->
+                                            <el-divider content-position="left">Stream Load 攒批配置</el-divider>
+                                            <el-row :gutter="20">
+                                                <el-col :span="8">
+                                                    <el-form-item label="启用攒批">
+                                                        <el-switch v-model="table.enableBatchWrite" :active-value="true" :inactive-value="false" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8" v-if="table.enableBatchWrite">
+                                                    <el-form-item label="批次大小">
+                                                        <el-input-number v-model="table.batchSize" :min="100" :max="100000" :step="100" style="width: 100%" :default-value="10000" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8" v-if="table.enableBatchWrite">
+                                                    <el-form-item label="Flush间隔(ms)">
+                                                        <el-input-number v-model="table.flushInterval" :min="1000" :max="300000" :step="1000" style="width: 100%" :default-value="30000" />
+                                                    </el-form-item>
+                                                </el-col>
+                                            </el-row>
+                                            <el-row :gutter="20" v-if="table.enableBatchWrite">
+                                                <el-col :span="8">
+                                                    <el-form-item label="最大重试次数">
+                                                        <el-input-number v-model="table.maxRetries" :min="0" :max="10" style="width: 100%" :default-value="3" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="重试间隔(ms)">
+                                                        <el-input-number v-model="table.retryInterval" :min="1000" :max="60000" :step="1000" style="width: 100%" :default-value="10000" />
+                                                    </el-form-item>
+                                                </el-col>
+                                                <el-col :span="8">
+                                                    <el-form-item label="写入方式">
+                                                        <select v-model="table.writeMode" class="native-select" style="width: 100%">
+                                                            <option value="stream_load">Stream Load</option>
+                                                            <option value="jdbc">JDBC</option>
+                                                        </select>
                                                     </el-form-item>
                                                 </el-col>
                                             </el-row>
@@ -1399,7 +2140,7 @@
                                             </el-col>
                                             <el-col :span="12">
                                                 <el-form-item label="源表">
-                                                    <el-select v-model="query.sourceTable" placeholder="选择源表" style="width: 100%;">
+                                                    <el-select v-model="query.sourceTable" placeholder="选择源表" style="width: 100%;" @change="onQuerySourceTableChange(query, $event)">
                                                         <el-option v-for="table in sourceTables" 
                                                                    :key="table.tableName" 
                                                                    :label="table.tableName" 
@@ -1584,7 +2325,8 @@
                                 <el-select v-model="selectedTables" multiple placeholder="请选择表" style="width: 100%;" filterable>
                                     <el-option v-for="table in dbTables" :key="table" :label="table" :value="table" />
                                 </el-select>
-                                <div style="margin-top: 15px; text-align: right;">
+                                <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center;">
+                                    <el-checkbox v-model="batchSyncEnabled">自动创建汇表和查询映射</el-checkbox>
                                     <el-button @click="fetchTables" :loading="loadingTables">
                                         <el-icon><Refresh /></el-icon> 刷新/加载表
                                     </el-button>
@@ -1618,6 +2360,14 @@
                                     <span>{{ row.host }}:{{ row.port }} {{ row.database }}</span>
                                 </template>
                             </el-table-column>
+                            <el-table-column label="FE 地址" min-width="150" show-overflow-tooltip>
+                                <template #default="{ row }">
+                                    <span v-if="(row.type === 'doris' || row.type === 'starrocks') && row.properties">
+                                        {{ row.properties.fe_host || '-' }}:{{ row.properties.fe_port || '-' }}
+                                    </span>
+                                    <span v-else>-</span>
+                                </template>
+                            </el-table-column>
                             <el-table-column label="用户名" min-width="150" show-overflow-tooltip>
                                 <template #default="{ row }">
                                     <span>{{ row.username || '-' }}</span>
@@ -1639,18 +2389,48 @@
                                     <el-input v-model="datasourceForm.name" placeholder="数据源名称" />
                                 </el-form-item>
                                 <el-form-item label="类型" required>
-                                    <el-select v-model="datasourceForm.type" placeholder="选择类型" style="width: 100%">
-                                        <el-option label="MySQL" value="mysql" />
-                                        <el-option label="PostgreSQL" value="postgresql" />
-                                        <el-option label="Oracle" value="oracle" />
-                                        <el-option label="SQL Server" value="sqlserver" />
-                                        <el-option label="MongoDB" value="mongodb" />
-                                        <el-option label="Redis" value="redis" />
-                                        <el-option label="ClickHouse" value="clickhouse" />
-                                        <el-option label="Doris" value="doris" />
-                                        <el-option label="StarRocks" value="starrocks" />
-                                    </el-select>
+                                    <select v-model="datasourceForm.type" class="native-select" style="width: 100%" @change="onDatasourceTypeChange">
+                                        <option value="" disabled selected>选择类型</option>
+                                        <option value="mysql">MySQL</option>
+                                        <option value="postgresql">PostgreSQL</option>
+                                        <option value="oracle">Oracle</option>
+                                        <option value="sqlserver">SQL Server</option>
+                                        <option value="mongodb">MongoDB</option>
+                                        <option value="redis">Redis</option>
+                                        <option value="clickhouse">ClickHouse</option>
+                                        <option value="doris">Doris</option>
+                                        <option value="starrocks">StarRocks</option>
+                                    </select>
                                 </el-form-item>
+                                
+                                <!-- Doris专属配置 -->
+                                <el-row :gutter="20" v-if="datasourceForm.type === 'doris'">
+                                    <el-col :span="16">
+                                        <el-form-item label="FE IP" required>
+                                            <el-input v-model="datasourceForm.fe_host" placeholder="Doris Frontend IP" />
+                                        </el-form-item>
+                                    </el-col>
+                                    <el-col :span="8">
+                                        <el-form-item label="FE 端口" required>
+                                            <el-input-number v-model="datasourceForm.fe_port" :min="1" :max="65535" style="width: 100%" :default-value="8030" />
+                                        </el-form-item>
+                                    </el-col>
+                                </el-row>
+                                
+                                <!-- StarRocks专属配置 -->
+                                <el-row :gutter="20" v-if="datasourceForm.type === 'starrocks'">
+                                    <el-col :span="16">
+                                        <el-form-item label="FE IP" required>
+                                            <el-input v-model="datasourceForm.fe_host" placeholder="StarRocks Frontend IP" />
+                                        </el-form-item>
+                                    </el-col>
+                                    <el-col :span="8">
+                                        <el-form-item label="FE 端口" required>
+                                            <el-input-number v-model="datasourceForm.fe_port" :min="1" :max="65535" style="width: 100%" :default-value="8030" />
+                                        </el-form-item>
+                                    </el-col>
+                                </el-row>
+                                
                                 <el-row :gutter="20">
                                     <el-col :span="16">
                                         <el-form-item label="主机" required>
@@ -1795,14 +2575,14 @@
                                     </div>
                                     
                                     <el-table :data="filteredHistoryJobs" style="width: 100%" v-loading="loadingHistoryJobs">
-                                        <el-table-column label="作业名称" min-width="180">
+                                        <el-table-column label="作业名称" min-width="200">
                                             <template #default="{ row }">
                                                 <el-tooltip :content="row.job_name || row.flink_job_name || row.job_id" placement="top">
                                                     <span>{{ row.job_name || row.flink_job_name || row.job_id }}</span>
                                                 </el-tooltip>
                                             </template>
                                         </el-table-column>
-                                        <el-table-column prop="job_id" label="Job ID" width="280">
+                                        <el-table-column prop="job_id" label="Job ID" min-width="250">
                                             <template #default="{ row }">
                                                 <el-link type="primary" @click="showHistoryJobDetail(row)">{{ row.job_id }}</el-link>
                                             </template>
@@ -1824,19 +2604,19 @@
                                                 {{ formatTimestamp(row.end_time) }}
                                             </template>
                                         </el-table-column>
-                                        <el-table-column label="保存的SQL" width="120">
+                                        <el-table-column label="保存的SQL" width="100">
                                             <template #default="{ row }">
                                                 <el-tag type="success" size="small" v-if="row.sql_text">有</el-tag>
                                                 <el-tag type="info" size="small" v-else>无</el-tag>
                                             </template>
                                         </el-table-column>
-                                        <el-table-column label="Savepoint" width="120">
+                                        <el-table-column label="Savepoint" width="100">
                                             <template #default="{ row }">
                                                 <el-tag type="warning" size="small" v-if="row.savepoint_path && row.savepoint_timestamp">有</el-tag>
                                                 <el-tag type="info" size="small" v-else>无</el-tag>
                                             </template>
                                         </el-table-column>
-                                        <el-table-column label="操作" width="180" fixed="right">
+                                        <el-table-column label="操作" width="200">
                                             <template #default="{ row }">
                                                 <el-button size="small" type="primary" @click="openHistoryRestartDialog(row)">
                                                     重新启动
@@ -2504,6 +3284,78 @@
                     }
                 }
 
+                // 辅助函数：自动创建汇表和查询映射
+                function createSyncPipeline(sourceConfig) {
+                    const sourceName = sourceConfig.tableName;
+                    if (!sourceName) return;
+
+                    // 1. 检查是否已有对应的汇表 (简单判断：名字包含 sourceName 且带 _sink)
+                    const sinkName = sourceName + '_sink';
+                    let sinkConfig = sinkTables.value.find(t => t.tableName === sinkName);
+
+                    if (!sinkConfig) {
+                        // 创建新汇表
+                        sinkConfig = {
+                            tableName: sinkName,
+                            autoCreateTable: true, // 默认开启自动建表
+                            connectorType: 'jdbc', // 默认使用 JDBC
+                            format: 'json',
+                            fields: JSON.parse(JSON.stringify(sourceConfig.fields)), // 拷贝字段
+                            jdbcUrl: '',
+                            jdbcDriver: 'com.mysql.cj.jdbc.Driver',
+                            jdbcTable: sourceName, // 物理表名默认同源表
+                            jdbcUsername: '',
+                            jdbcPassword: '',
+                            // 默认优化配置
+                            jdbcBufferFlushMaxRows: '100',
+                            jdbcBufferFlushInterval: '1s',
+                            jdbcMaxRetries: '3'
+                        };
+                        
+                        // 尝试从现有汇表拷贝连接信息 (如果有)
+                        if (sinkTables.value.length > 0) {
+                            const template = sinkTables.value[0];
+                            sinkConfig.connectorType = template.connectorType;
+                            sinkConfig.jdbcUrl = template.jdbcUrl;
+                            sinkConfig.jdbcUsername = template.jdbcUsername;
+                            sinkConfig.jdbcPassword = template.jdbcPassword;
+                            sinkConfig.jdbcDriver = template.jdbcDriver;
+                            sinkConfig.starrocksUrl = template.starrocksUrl;
+                            sinkConfig.starrocksUsername = template.starrocksUsername;
+                            sinkConfig.starrocksPassword = template.starrocksPassword;
+                            sinkConfig.dorisUrl = template.dorisUrl;
+                            sinkConfig.dorisUsername = template.dorisUsername;
+                            sinkConfig.dorisPassword = template.dorisPassword;
+                        }
+                        
+                        sinkTables.value.push(sinkConfig);
+                    }
+
+                    // 2. 检查是否已有对应的查询
+                    const hasQuery = queries.value.some(q => q.sourceTable === sourceName && q.sinkTable === sinkName);
+                    if (!hasQuery) {
+                        const newQuery = {
+                            sinkTable: sinkName,
+                            sourceTable: sourceName,
+                            queryType: 'insert',
+                            selectFields: sourceConfig.fields.map(f => f.name),
+                            selectedFields: sourceConfig.fields.map(f => f.name),
+                            groupByFields: [],
+                            aggregates: [],
+                            whereClause: '',
+                            havingClause: '',
+                            joinType: 'INNER',
+                            joinTable: '',
+                            joinCondition: '',
+                            windowType: 'TUMBLE',
+                            windowSize: '5 MINUTES',
+                            slideSize: '1 MINUTE',
+                            windowTimeField: ''
+                        };
+                        queries.value.push(newQuery);
+                    }
+                }
+
                  // 获取作业列表
                  async function refreshJobs() {
                      loadingJobs.value = true;
@@ -2865,16 +3717,47 @@
 
                 // 自动填充驱动类
                 function autoFillDriver(table) {
-                    if (!table.jdbcUrl) return;
+                    // 驱动类映射表
+                    const driverMappings = {
+                        'mysql': 'com.mysql.cj.jdbc.Driver',
+                        'postgresql': 'org.postgresql.Driver',
+                        'oracle': 'oracle.jdbc.OracleDriver',
+                        'sqlserver': 'com.microsoft.sqlserver.jdbc.SQLServerDriver',
+                        'doris': 'com.mysql.cj.jdbc.Driver',
+                        'starrocks': 'com.mysql.cj.jdbc.Driver',
+                        'clickhouse': 'com.clickhouse.jdbc.ClickHouseDriver',
+                        'kafka': 'org.apache.kafka.connect.jdbc.KafkaConnectJdbcDriver',
+                        'oceanbase': 'com.oceanbase.jdbc.Driver'
+                    };
                     
-                    if (table.jdbcUrl.includes('mysql')) {
-                        table.jdbcDriver = 'com.mysql.cj.jdbc.Driver';
-                    } else if (table.jdbcUrl.includes('postgresql')) {
-                        table.jdbcDriver = 'org.postgresql.Driver';
-                    } else if (table.jdbcUrl.includes('oracle')) {
-                        table.jdbcDriver = 'oracle.jdbc.OracleDriver';
-                    } else if (table.jdbcUrl.includes('sqlserver')) {
-                        table.jdbcDriver = 'com.microsoft.sqlserver.jdbc.SQLServerDriver';
+                    // 优先从JDBC URL中识别
+                    if (table.jdbcUrl) {
+                        for (const [dbType, driver] of Object.entries(driverMappings)) {
+                            if (table.jdbcUrl.toLowerCase().includes(dbType)) {
+                                table.jdbcDriver = driver;
+                                return;
+                            }
+                        }
+                    }
+                    
+                    // 根据连接器类型自动填充
+                    if (table.connectorType) {
+                        const connector = table.connectorType.toLowerCase();
+                        for (const [dbType, driver] of Object.entries(driverMappings)) {
+                            if (connector.includes(dbType)) {
+                                // 不同连接器的驱动字段可能不同
+                                if (connector.startsWith('doris')) {
+                                    table.dorisDriver = driver;
+                                } else if (connector.startsWith('starrocks')) {
+                                    table.starrocksDriver = driver;
+                                } else if (connector.startsWith('clickhouse')) {
+                                    table.clickhouseDriver = driver;
+                                } else {
+                                    table.jdbcDriver = driver;
+                                }
+                                return;
+                            }
+                        }
                     }
                 }
                 
@@ -2925,6 +3808,8 @@
                         dorisUsername: '',
                         dorisPassword: '',
                         dorisDriver: 'com.mysql.cj.jdbc.Driver',
+                        replicationNum: 1,
+                        dorisBuckets: 10,
                         filePath: ''
                     });
                 }
@@ -2932,6 +3817,9 @@
                 // 处理汇表连接器变更（自动填充）
                 function handleSinkConnectorChange(table) {
                     if (!table.connectorType) return;
+                    
+                    // 自动填充驱动类
+                    autoFillDriver(table);
                     
                     // 如果有源表，尝试自动填充
                     if (sourceTables.value.length > 0) {
@@ -2972,6 +3860,13 @@
                             
                             ElementPlus.ElMessage.success('已自动从源表填充表名和字段信息');
                         }
+                    }
+                }
+
+                function onSinkLogicalTableInput(table, value) {
+                    if (!table) return;
+                    if (table.connectorType === 'doris' && !table.dorisTable) {
+                        table.dorisTable = value;
                     }
                 }
 
@@ -3072,6 +3967,51 @@
                         const fieldsToSelect = sourceTableFields.map(f => f.name);
                         newQuery.selectFields = fieldsToSelect;
                         newQuery.selectedFields = fieldsToSelect;
+                    }
+                }
+
+                // 选择源表变化，自动设置汇表名
+                function onQuerySourceTableChange(query, sourceTableName) {
+                    if (!sourceTableName) return;
+                    // 汇表名规则：源表名 + "_sink"
+                    const sinkTableName = sourceTableName + "_sink";
+                    query.sinkTable = sinkTableName;
+                    
+                    // 如果汇表不存在，自动添加汇表
+                    const existingSink = sinkTables.value.find(t => t.tableName === sinkTableName);
+                    if (!existingSink) {
+                        const newSink = {
+                            tableName: sinkTableName,
+                            autoCreateTable: true,
+                            connectorType: '',
+                            format: 'json',
+                            fields: getFieldsByTable(sourceTableName).map(f => ({...f})),
+                            kafkaTopic: '',
+                            kafkaBootstrapServers: 'localhost:9092',
+                            jdbcUrl: '',
+                            jdbcDriver: '',
+                            jdbcUsername: '',
+                            jdbcPassword: '',
+                            jdbcDatabase: '',
+                            jdbcTable: '',
+                            dorisUrl: '',
+                            dorisDriver: '',
+                            dorisUsername: '',
+                            dorisPassword: '',
+                            dorisTable: '',
+                            dorisFeHost: '',
+                            dorisFePort: '',
+                            starrocksUrl: '',
+                            starrocksDriver: '',
+                            starrocksUsername: '',
+                            starrocksPassword: '',
+                            starrocksTable: '',
+                            starrocksFeHost: '',
+                            starrocksFePort: '',
+                            bucketNum: 10,
+                            replicationNum: 1
+                        };
+                        sinkTables.value.push(newSink);
                     }
                 }
 
@@ -3408,14 +4348,17 @@
                             withOptions.push('    \'sink.max-retries\' = \'' + table.jdbcMaxRetries + '\'');
                         }
                     } else if (table.connectorType === 'starrocks') {
+                        const starrocksDb = table.starrocksUrl.split('/')[3] || 'default_db';
                         withOptions.push('    \'jdbc-url\' = \'' + table.starrocksUrl + '\'');
-                        withOptions.push('    \'load-url\' = \'' + table.starrocksUrl.replace('9030', '8030') + '\'');
-                        withOptions.push('    \'database-name\' = \'' + (table.starrocksUrl.split('/')[3] || 'default_db') + '\'');
-                        withOptions.push('    \'table-name\' = \'' + table.starrocksTable + '\'');
+                        // 优先使用FE地址，如果没有则从JDBC URL提取
+                        const feHost = table.starrocksFeHost || table.starrocksUrl.replace('jdbc:mysql://', '').split(':')[0];
+                        const fePort = table.starrocksFePort || 8030;
+                        withOptions.push('    \'load-url\' = \'' + feHost + ':' + fePort + '\'');
+                        withOptions.push('    \'table.identifier\' = \'' + starrocksDb + '.' + table.starrocksTable + '\'');
                         withOptions.push('    \'username\' = \'' + table.starrocksUsername + '\'');
                         withOptions.push('    \'password\' = \'' + table.starrocksPassword + '\'');
                         withOptions.push('    \'sink.properties.format\' = \'json\'');
-                        withOptions.push('    \'sink.properties.strip_outer_array\' = \'true\'');
+                        withOptions.push('    \'sink.properties.strip_outer_array\' = \'false\'');
                         if (table.starrocksWriteMode) {
                             withOptions.push('    \'sink.buffer-flush.max-bytes\' = \'10485760\'');
                             withOptions.push('    \'sink.buffer-flush.max-rows\' = \'10000\'');
@@ -3432,19 +4375,19 @@
                             withOptions.push('    \'sink.write-mode\' = \'async_insert\'');
                         }
                     } else if (table.connectorType === 'doris') {
-                        withOptions.push('    \'fenodes\' = \'' + table.dorisUrl.replace('jdbc:mysql://', '').split(':')[0] + ':8030\'');
-                        withOptions.push('    \'database-name\' = \'' + (table.dorisUrl.split('/')[3] || 'default_db') + '\'');
-                        withOptions.push('    \'table-name\' = \'' + table.dorisTable + '\'');
+                        const dorisDb = table.dorisUrl.split('/')[3] || 'default_db';
+                        withOptions.push('    \'fenodes\' = \'' + (table.dorisFeHost || table.dorisUrl.replace('jdbc:mysql://', '').split(':')[0]) + ':' + (table.dorisFePort || 8030) + '\'');
+                        withOptions.push('    \'table.identifier\' = \'' + dorisDb + '.' + table.dorisTable + '\'');
                         withOptions.push('    \'username\' = \'' + table.dorisUsername + '\'');
                         withOptions.push('    \'password\' = \'' + table.dorisPassword + '\'');
                         withOptions.push('    \'sink.properties.format\' = \'json\'');
-                        withOptions.push('    \'sink.properties.strip_outer_array\' = \'true\'');
+                        withOptions.push('    \'sink.properties.strip_outer_array\' = \'false\'');
                     } else if (table.connectorType === 'filesystem') {
                         withOptions.push('    \'path\' = \'' + table.filePath + '\'');
                     }
 
                     // 格式配置（print 和 blackhole 不支持 format）
-                    if (table.format && table.connectorType !== 'print' && table.connectorType !== 'blackhole' && !table.connectorType.endsWith('-cdc') && table.connectorType !== 'jdbc' && table.connectorType !== 'jdbc-upsert') {
+                    if (table.format && table.connectorType !== 'print' && table.connectorType !== 'blackhole' && table.connectorType !== 'doris' && table.connectorType !== 'starrocks' && !table.connectorType.endsWith('-cdc') && table.connectorType !== 'jdbc' && table.connectorType !== 'jdbc-upsert') {
                         withOptions.push('    \'format\' = \'' + table.format + '\'');
                     }
                     
@@ -3570,9 +4513,17 @@
                     });
                     
                     // 生成查询
+                    if (queries.value.length > 1) {
+                        sql += 'BEGIN STATEMENT SET;\n\n';
+                    }
+                    
                     queries.value.forEach(query => {
                         sql += generateQuerySQL(query);
                     });
+                    
+                    if (queries.value.length > 1) {
+                        sql += 'END;\n';
+                    }
                     
                     return sql;
                 }
@@ -3629,6 +4580,8 @@
                                     createPayload.url = table.dorisUrl;
                                     createPayload.username = table.dorisUsername;
                                     createPayload.password = table.dorisPassword;
+                                    createPayload.replication_num = table.replicationNum || 1;
+                                    createPayload.buckets = table.dorisBuckets || 10;
                                 } else {
                                     // 其他类型暂时不支持自动创建或不需要（如 Kafka, File）
                                     continue;
@@ -3968,6 +4921,7 @@
                 const dbTables = ref([]);
                 const selectedTables = ref([]);
                 const loadingTables = ref(false);
+                const batchSyncEnabled = ref(true); // 默认开启批量同步
                 const currentTableConfig = ref(null);
 
                 function openTableSelection(table) {
@@ -4055,95 +5009,101 @@
                     }
                     
                     const isJdbc = currentTableConfig.value.connectorType === 'jdbc';
-                    
                     if (isJdbc && selectedTables.value.length > 1) {
                          ElementPlus.ElMessage.warning('JDBC 源只支持选择单张表');
-                         // Take the first one
                          selectedTables.value = [selectedTables.value[0]];
                     }
                     
-                    let tableStr = '';
+                    const tablesToProcess = [...selectedTables.value];
+                    const firstTable = tablesToProcess[0];
+                    const otherTables = tablesToProcess.slice(1);
                     
-                    if (selectedTables.value.length === 1) {
-                        tableStr = selectedTables.value[0];
-                    } else {
-                        // Create regex: (t1|t2|t3)
-                        tableStr = `(${selectedTables.value.join('|')})`;
+                    // 保存基础配置用于克隆
+                    const baseConfig = JSON.parse(JSON.stringify(currentTableConfig.value));
+                    
+                    const loading = ElementPlus.ElLoading.service({
+                        lock: true,
+                        text: '正在同步表信息...',
+                        background: 'rgba(0, 0, 0, 0.7)',
+                    });
+
+                    try {
+                        // 1. 处理第一个表 (当前配置)
+                        await applySingleTableSelection(currentTableConfig.value, firstTable);
+                        
+                        // 2. 处理其他表 (创建新配置)
+                        for (const tableName of otherTables) {
+                            const newConfig = JSON.parse(JSON.stringify(baseConfig));
+                            await applySingleTableSelection(newConfig, tableName);
+                            sourceTables.value.push(newConfig);
+                            
+                            // 如果开启了自动同步，为新表创建汇表和查询
+                            if (batchSyncEnabled.value) {
+                                createSyncPipeline(newConfig);
+                            }
+                        }
+                        
+                        // 3. 处理第一个表 (如果开启了自动同步且还没有对应的汇表/查询)
+                        if (batchSyncEnabled.value) {
+                            createSyncPipeline(currentTableConfig.value);
+                        }
+                        
+                        ElementPlus.ElMessage.success(`已成功添加 ${tablesToProcess.length} 张表`);
+                    } catch (e) {
+                        console.error('批量处理表失败', e);
+                        ElementPlus.ElMessage.error('处理表信息失败: ' + e.message);
+                    } finally {
+                        loading.close();
+                        showTableSelectionDialog.value = false;
                     }
+                }
+
+                // 辅助函数：将单个表应用到配置对象
+                async function applySingleTableSelection(config, tableName) {
+                    const isJdbc = config.connectorType === 'jdbc';
+                    const dbName = getDatabaseName(config);
                     
-                    // 获取库名
-                    const dbName = getDatabaseName(currentTableConfig.value);
-                    
-                    // 构造完整的显示表名
-                    // 对于 CDC，格式为 db.table
-                    // 对于 JDBC，保持原样（通常不带库名）
-                    let flinkTableName = tableStr;
-                    let connectorTableName = tableStr;
+                    let flinkTableName = tableName;
+                    let connectorTableName = tableName;
 
                     if (!isJdbc && dbName) {
                         // Flink SQL Identifier: 使用下划线避免 Catalog 错误 (例如 vl_web_user)
-                        flinkTableName = `${dbName}_${tableStr}`;
+                        flinkTableName = `${dbName}_${tableName}`;
                         // Connector Option: 使用点号用于 CDC 匹配 (例如 vl_web.user)
-                        connectorTableName = `${dbName}.${tableStr}`;
+                        connectorTableName = `${dbName}.${tableName}`;
                     }
                     
-                    // 1. 更新主表名
-                    currentTableConfig.value.tableName = flinkTableName;
+                    config.tableName = flinkTableName;
                     
-                    // 2. 更新连接器特定配置
                     if (isJdbc) {
-                        // JDBC usually uses just the table name if URL has DB
-                        currentTableConfig.value.jdbcTable = tableStr;
+                        config.jdbcTable = tableName;
                     } else {
-                        // 手动更新连接器配置，避免直接调用 syncTableName 可能导致的覆盖问题
-                        const table = currentTableConfig.value;
-                        if (table.connectorType === 'mysql-cdc') table.mysqlTable = connectorTableName;
-                        else if (table.connectorType === 'postgres-cdc') table.postgresTable = connectorTableName;
-                        else if (table.connectorType === 'oracle-cdc') table.oracleTable = connectorTableName;
-                        else if (table.connectorType === 'sqlserver-cdc') table.sqlserverTable = connectorTableName;
-                        else if (table.connectorType === 'mongodb-cdc') table.mongodbCollection = connectorTableName; // MongoDB 可能不需要库名，视情况而定
-                        else if (table.connectorType === 'oceanbase-cdc') table.oceanbaseTable = connectorTableName;
-                        else if (table.connectorType === 'doris-cdc') table.dorisTable = connectorTableName;
-                        else if (table.connectorType === 'starrocks-cdc') table.starrocksTable = connectorTableName;
+                        if (config.connectorType === 'mysql-cdc') config.mysqlTable = connectorTableName;
+                        else if (config.connectorType === 'postgres-cdc') config.postgresTable = connectorTableName;
+                        else if (config.connectorType === 'oracle-cdc') config.oracleTable = connectorTableName;
+                        else if (config.connectorType === 'sqlserver-cdc') config.sqlserverTable = connectorTableName;
+                        else if (config.connectorType === 'mongodb-cdc') config.mongodbCollection = connectorTableName;
+                        else if (config.connectorType === 'oceanbase-cdc') config.oceanbaseTable = connectorTableName;
+                        else if (config.connectorType === 'doris-cdc') config.dorisTable = connectorTableName;
+                        else if (config.connectorType === 'starrocks-cdc') config.starrocksTable = connectorTableName;
                     }
 
-                    showTableSelectionDialog.value = false;
-
-                    // 自动获取字段信息 (仅当选择了单个表且有 datasourceId 时)
-                    if (selectedTables.value.length === 1 && currentTableConfig.value.datasourceId) {
+                    // 自动获取字段信息
+                    if (config.datasourceId) {
                         try {
-                            const loading = ElementPlus.ElLoading.service({
-                                lock: true,
-                                text: '正在获取表结构...',
-                                background: 'rgba(0, 0, 0, 0.7)',
-                            });
-                            
-                            const tableName = selectedTables.value[0];
-                            console.log(`正在获取表字段: ID=${currentTableConfig.value.datasourceId}, Table=${tableName}`);
-                            
-                            const response = await fetchApi(`/api/datasources/${currentTableConfig.value.datasourceId}/tables/${encodeURIComponent(tableName)}/columns`);
-                            const columns = response.columns;
-                            
-                            if (columns && columns.length > 0) {
-                                currentTableConfig.value.fields = columns.map(col => ({
+                            const response = await fetchApi(`/api/datasources/${config.datasourceId}/tables/${encodeURIComponent(tableName)}/columns`);
+                            if (response.columns && response.columns.length > 0) {
+                                config.fields = response.columns.map(col => ({
                                     name: col.name,
                                     type: col.type,
                                     precision: '',
                                     scale: '',
                                     primaryKey: col.primaryKey || false
                                 }));
-                                ElementPlus.ElMessage.success(`已自动加载 ${columns.length} 个字段`);
-                            } else {
-                                ElementPlus.ElMessage.info('未获取到字段信息，请手动添加');
                             }
-                            loading.close();
                         } catch (e) {
-                            console.error('获取字段失败', e);
-                            ElementPlus.ElMessage.warning('自动获取字段失败: ' + e.message);
+                            console.warn(`获取表 ${tableName} 字段失败:`, e);
                         }
-                    } else if (!currentTableConfig.value.datasourceId) {
-                         // 只有当没有选择数据源时才提示，避免打扰手动输入的场景
-                         // console.log("未选择数据源，跳过自动获取字段");
                     }
                 }
 
@@ -4226,6 +5186,15 @@
                     if (datasource) {
                         Object.assign(datasourceForm, datasource);
                         datasourceForm.properties = datasource.properties || {};
+                        // 从properties中读取fe_host和fe_port
+                        if (datasource.properties) {
+                            if (datasource.properties.fe_host) {
+                                datasourceForm.fe_host = datasource.properties.fe_host;
+                            }
+                            if (datasource.properties.fe_port) {
+                                datasourceForm.fe_port = datasource.properties.fe_port;
+                            }
+                        }
                     } else {
                         datasourceForm.id = null;
                         datasourceForm.name = '';
@@ -4236,6 +5205,8 @@
                         datasourceForm.username = '';
                         datasourceForm.password = '';
                         datasourceForm.properties = {};
+                        datasourceForm.fe_host = '';
+                        datasourceForm.fe_port = 8030;
                     }
                     datasourceDialogVisible.value = true;
                 }
@@ -4249,6 +5220,14 @@
                         ElementPlus.ElMessage.warning('请填写必填字段');
                         return;
                     }
+                    
+                    // 将fe_host和fe_port保存到properties中
+                    if (datasourceForm.type === 'doris' || datasourceForm.type === 'starrocks') {
+                        datasourceForm.properties = datasourceForm.properties || {};
+                        datasourceForm.properties.fe_host = datasourceForm.fe_host;
+                        datasourceForm.properties.fe_port = datasourceForm.fe_port;
+                    }
+                    
                     savingDatasource.value = true;
                     try {
                         const url = datasourceForm.id ? `/api/datasources/${datasourceForm.id}` : '/api/datasources';
@@ -4345,6 +5324,13 @@
                         table.jdbcPassword = ds.password;
                         table.jdbcDatabase = ds.database;
                         
+                        // 自动填写表名：如果Flink表名已存在（如从源表自动生成）就复用，否则用数据源名_sink
+                        if (!table.tableName) {
+                            table.tableName = `${ds.name}_sink`;
+                        }
+                        // 物理表名默认和Flink表名一致
+                        table.jdbcTable = table.tableName;
+                        
                         // 根据数据源类型预设 URL 模板
                         if (ds.type === 'mysql') {
                             table.jdbcUrl = `jdbc:mysql://${ds.host}:${ds.port}/${ds.database}`;
@@ -4358,6 +5344,9 @@
                         } else if (ds.type === 'sqlserver') {
                             table.jdbcUrl = `jdbc:sqlserver://${ds.host}:${ds.port};databaseName=${ds.database}`;
                             table.jdbcDriver = 'com.microsoft.sqlserver.jdbc.SQLServerDriver';
+                        } else if (ds.type === 'clickhouse') {
+                            table.jdbcUrl = `jdbc:clickhouse://${ds.host}:${ds.port}/${ds.database}`;
+                            table.jdbcDriver = 'com.clickhouse.jdbc.ClickHouseDriver';
                         }
 
                         if (typeof updateJdbcUrl === 'function') {
@@ -4368,6 +5357,10 @@
                         table.mysqlUsername = ds.username;
                         table.mysqlPassword = ds.password;
                         table.mysqlDatabase = ds.database;
+                        
+                        // 自动填写表名
+                        table.tableName = `${ds.name}_source`;
+                        table.mysqlTable = '';
                     } else if (table.connectorType === 'postgres-cdc') {
                         // Postgres CDC 暂未完全支持
                     } else if (table.connectorType === 'oracle-cdc') {
@@ -4375,15 +5368,49 @@
                         table.oracleUsername = ds.username;
                         table.oraclePassword = ds.password;
                         table.oracleServiceName = ds.database;
+                        
+                        // 自动填写表名
+                        table.tableName = `${ds.name}_source`;
+                        table.oracleTable = '';
                     } else if (table.connectorType === 'starrocks') {
+                        // JDBC使用host:port（9030），Stream Load使用fe_host:fe_port（8030）
                         table.starrocksUrl = `jdbc:mysql://${ds.host}:${ds.port}/${ds.database}`;
+                        table.starrocksDriver = 'com.mysql.cj.jdbc.Driver';
                         table.starrocksUsername = ds.username;
                         table.starrocksPassword = ds.password;
+                        table.starrocksFeHost = ds.fe_host;
+                        table.starrocksFePort = ds.fe_port;
+                        
+                        // 自动填写表名：如果Flink表名已存在（如从源表自动生成）就复用，否则用数据源名_sink
+                        if (!table.tableName) {
+                            table.tableName = `${ds.name}_sink`;
+                        }
+                        // 物理表名默认和Flink表名一致
+                        table.starrocksTable = table.tableName;
+                    } else if (table.connectorType === 'doris') {
+                        // JDBC使用host:port（9030），Stream Load使用fe_host:fe_port（8030）
+                        table.dorisUrl = `jdbc:mysql://${ds.host}:${ds.port}/${ds.database}`;
+                        table.dorisDriver = 'com.mysql.cj.jdbc.Driver';
+                        table.dorisUsername = ds.username;
+                        table.dorisPassword = ds.password;
+                        table.dorisFeHost = ds.fe_host;
+                        table.dorisFePort = ds.fe_port;
+                        
+                        // 自动填写表名：如果Flink表名已存在（如从源表自动生成）就复用，否则用数据源名_sink
+                        if (!table.tableName) {
+                            table.tableName = `${ds.name}_sink`;
+                        }
+                        // 物理表名默认和Flink表名一致
+                        table.dorisTable = table.tableName;
                     } else if (table.connectorType === 'sqlserver-cdc') {
                         table.sqlserverHost = `${ds.host}:${ds.port}`;
                         table.sqlserverUsername = ds.username;
                         table.sqlserverPassword = ds.password;
                         table.sqlserverDatabase = ds.database;
+                        
+                        // 自动填写表名
+                        table.tableName = `${ds.name}_source`;
+                        table.sqlserverTable = '';
                     }
                 }
 
@@ -4416,6 +5443,7 @@
                     dbTables,
                     selectedTables,
                     loadingTables,
+                    batchSyncEnabled,
                     openTableSelection,
                     fetchTables,
                     confirmTableSelection,
@@ -4502,6 +5530,7 @@
                     addSinkTable,
                     removeSinkTable,
                     handleSinkConnectorChange,
+                    onSinkLogicalTableInput,
                     addField,
                     removeField,
                     handlePrimaryKey,

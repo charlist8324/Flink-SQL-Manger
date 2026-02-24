@@ -1,5 +1,0 @@
-{
-  "job_name": "test-create-table",
-  "sql_text": "CREATE TABLE test_table (id INT, name STRING) WITH ('connector' = 'print')",
-  "parallelism": 1
-}

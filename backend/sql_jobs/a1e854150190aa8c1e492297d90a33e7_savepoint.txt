@@ -1,0 +1,1 @@
+file:/home/etl_test/flink-1.18.1/checkpoint/savepoints/savepoint-a1e854-6326d0f565bf

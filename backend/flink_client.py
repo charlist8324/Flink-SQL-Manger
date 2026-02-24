@@ -7,7 +7,7 @@ import asyncio
 import time
 import httpx
 from typing import Optional, List, Dict, Any
-from .config import FLINK_REST_URL
+from config import FLINK_REST_URL
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ class FlinkClient:
     """Flink REST API 客户端"""
 
     def __init__(self, base_url: str = FLINK_REST_URL, sql_gateway_url: str = None):
-        from .config import SQL_GATEWAY_URL
+        from config import SQL_GATEWAY_URL
         self.base_url = base_url.rstrip("/")
         self.sql_gateway_url = (sql_gateway_url or SQL_GATEWAY_URL).rstrip("/")
 
@@ -538,12 +538,14 @@ class FlinkClient:
                 return {"jobid": insert_job_id, "status": "success"}
             elif insert_operation_handle:
                 logger.info(f"✅ INSERT 语句已提交，作业正在启动中，操作句柄: {insert_operation_handle}")
-                # 轮询获取作业 ID
-                max_retries = 30  # 增加重试次数
-                retry_delay = 1.0  # 增加等待时间
+                # 轮询获取作业 ID - 快速响应
+                max_retries = 5  # 减少重试次数
+                retry_delay = 0.3  # 减少等待时间
 
                 for retry in range(max_retries):
-                    await asyncio.sleep(retry_delay)
+                    # 第一次不等待，后续每次等待
+                    if retry > 0:
+                        await asyncio.sleep(retry_delay)
                     
                     # 方法1：尝试从operation result获取jobid
                     try:
