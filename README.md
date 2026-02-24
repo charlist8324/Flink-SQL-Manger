@@ -1,6 +1,8 @@
 # Flink SQL Manager - Flink SQL 低代码可视化配置平台
 
 Flink Manager 是一个低代码的 Apache Flink SQL 可视化配置管理平台，通过图形化界面简化实时计算作业的开发、部署和运维。无需手动编写复杂的 Flink SQL 和连接器配置，只需通过表单选择即可快速构建实时数据集成任务。
+
+
 备注：前端页面index.html是老版页面，index_new.html是新版页面，做了功能拆分，更流畅，功能更友好
 
 ## 核心特性
