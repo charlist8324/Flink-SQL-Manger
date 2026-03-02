@@ -1,0 +1,1 @@
+file:/home/flink-1.18.1/checkpoint/savepoints/Kafka测1/savepoint-b3430b-2a46cc0fd61d

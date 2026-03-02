@@ -1,0 +1,1 @@
+file:/home/flink-1.18.1/checkpoint/savepoints/测试自定义checkpoint目录6/savepoint-7eb1f9-d44bcf6b0155

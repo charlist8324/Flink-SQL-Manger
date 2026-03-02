@@ -1,0 +1,300 @@
+﻿2026-02-27 00:04:34,859 [DEBUG] flink_client - 鍙戦€?HTTP 璇锋眰: GET http://192.168.31.251:8081/jobs
+2026-02-27 00:04:34,859 [DEBUG] flink_client - 鍙傛暟: {}
+2026-02-27 00:04:35,227 [DEBUG] httpcore.connection - connect_tcp.started host='192.168.31.251' port=8081 local_address=None timeout=30.0 socket_options=None
+2026-02-27 00:04:35,231 [DEBUG] httpcore.connection - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002933FE72170>
+2026-02-27 00:04:35,235 [DEBUG] httpcore.http11 - send_request_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:35,236 [DEBUG] httpcore.http11 - send_request_headers.complete
+2026-02-27 00:04:35,237 [DEBUG] httpcore.http11 - send_request_body.started request=<Request [b'GET']>
+2026-02-27 00:04:35,237 [DEBUG] httpcore.http11 - send_request_body.complete
+2026-02-27 00:04:35,237 [DEBUG] httpcore.http11 - receive_response_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:35,238 [DEBUG] httpcore.connection - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002933FE71860>
+2026-02-27 00:04:35,242 [DEBUG] httpcore.http11 - send_request_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:35,244 [DEBUG] httpcore.http11 - send_request_headers.complete
+2026-02-27 00:04:35,244 [DEBUG] httpcore.http11 - send_request_body.started request=<Request [b'GET']>
+2026-02-27 00:04:35,244 [DEBUG] httpcore.http11 - send_request_body.complete
+2026-02-27 00:04:35,245 [DEBUG] httpcore.http11 - receive_response_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:35,245 [DEBUG] httpcore.http11 - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'content-type', b'application/json; charset=UTF-8'), (b'access-control-allow-origin', b'*'), (b'connection', b'keep-alive'), (b'content-length', b'257')])
+2026-02-27 00:04:35,246 [INFO] httpx - HTTP Request: GET http://192.168.31.251:8081/jobs "HTTP/1.1 200 OK"
+2026-02-27 00:04:35,246 [DEBUG] httpcore.http11 - receive_response_body.started request=<Request [b'GET']>
+2026-02-27 00:04:35,247 [DEBUG] httpcore.http11 - receive_response_body.complete
+2026-02-27 00:04:35,252 [DEBUG] httpcore.http11 - response_closed.started
+2026-02-27 00:04:35,252 [DEBUG] httpcore.http11 - response_closed.complete
+2026-02-27 00:04:35,257 [DEBUG] flink_client - 鍝嶅簲鐘舵€佺爜: 200
+2026-02-27 00:04:35,257 [DEBUG] flink_client - 鍝嶅簲缁撴灉锛堝墠 500 瀛楃锛? {'jobs': [{'id': '31c4ba253338fe8e74ea59b0efd132fd', 'status': 'FINISHED'}, {'id': '315234093a5a5235987fcdb47fb3c96d', 'status': 'RUNNING'}, {'id': '2ca98244f096f9f0be7d050b7fa6bd83', 'status': 'FINISHED'}, {'id': '90f346a4514703d8d48a65aabd2ba2fe', 'status': 'FINISHED'}]}
+2026-02-27 00:04:35,262 [DEBUG] httpcore.connection - close.started
+2026-02-27 00:04:35,263 [DEBUG] httpcore.connection - close.complete
+2026-02-27 00:04:35,265 [DEBUG] httpcore.http11 - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'content-type', b'application/json; charset=UTF-8'), (b'access-control-allow-origin', b'*'), (b'connection', b'keep-alive'), (b'content-length', b'257')])
+2026-02-27 00:04:35,265 [INFO] httpx - HTTP Request: GET http://192.168.31.251:8081/jobs "HTTP/1.1 200 OK"
+2026-02-27 00:04:35,266 [DEBUG] httpcore.http11 - receive_response_body.started request=<Request [b'GET']>
+2026-02-27 00:04:35,266 [DEBUG] httpcore.http11 - receive_response_body.complete
+2026-02-27 00:04:35,270 [DEBUG] httpcore.http11 - response_closed.started
+2026-02-27 00:04:35,271 [DEBUG] httpcore.http11 - response_closed.complete
+2026-02-27 00:04:35,275 [DEBUG] flink_client - 鍝嶅簲鐘舵€佺爜: 200
+2026-02-27 00:04:35,276 [DEBUG] flink_client - 鍝嶅簲缁撴灉锛堝墠 500 瀛楃锛? {'jobs': [{'id': '315234093a5a5235987fcdb47fb3c96d', 'status': 'RUNNING'}, {'id': '31c4ba253338fe8e74ea59b0efd132fd', 'status': 'FINISHED'}, {'id': '2ca98244f096f9f0be7d050b7fa6bd83', 'status': 'FINISHED'}, {'id': '90f346a4514703d8d48a65aabd2ba2fe', 'status': 'FINISHED'}]}
+2026-02-27 00:04:35,281 [DEBUG] httpcore.connection - close.started
+2026-02-27 00:04:35,282 [DEBUG] httpcore.connection - close.complete
+2026-02-27 00:04:35,282 [INFO] __main__ - 浠?Flink 鑾峰彇鍒?4 涓綔涓?
+2026-02-27 00:04:35,314 [DEBUG] flink_client - 鍙戦€?HTTP 璇锋眰: GET http://192.168.31.251:8081/jobs/315234093a5a5235987fcdb47fb3c96d
+2026-02-27 00:04:35,314 [DEBUG] flink_client - 鍙傛暟: {}
+2026-02-27 00:04:35,663 [DEBUG] httpcore.connection - connect_tcp.started host='192.168.31.251' port=8081 local_address=None timeout=30.0 socket_options=None
+2026-02-27 00:04:35,672 [DEBUG] httpcore.connection - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002933FE71C70>
+2026-02-27 00:04:35,676 [DEBUG] httpcore.http11 - send_request_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:35,678 [DEBUG] httpcore.http11 - send_request_headers.complete
+2026-02-27 00:04:35,678 [DEBUG] httpcore.http11 - send_request_body.started request=<Request [b'GET']>
+2026-02-27 00:04:35,678 [DEBUG] httpcore.http11 - send_request_body.complete
+2026-02-27 00:04:35,678 [DEBUG] httpcore.http11 - receive_response_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:35,684 [DEBUG] httpcore.http11 - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'content-type', b'application/json; charset=UTF-8'), (b'access-control-allow-origin', b'*'), (b'connection', b'keep-alive'), (b'content-length', b'4528')])
+2026-02-27 00:04:35,684 [INFO] httpx - HTTP Request: GET http://192.168.31.251:8081/jobs/315234093a5a5235987fcdb47fb3c96d "HTTP/1.1 200 OK"
+2026-02-27 00:04:35,685 [DEBUG] httpcore.http11 - receive_response_body.started request=<Request [b'GET']>
+2026-02-27 00:04:35,685 [DEBUG] httpcore.http11 - receive_response_body.complete
+2026-02-27 00:04:35,689 [DEBUG] httpcore.http11 - response_closed.started
+2026-02-27 00:04:35,689 [DEBUG] httpcore.http11 - response_closed.complete
+2026-02-27 00:04:35,694 [DEBUG] flink_client - 鍝嶅簲鐘舵€佺爜: 200
+2026-02-27 00:04:35,695 [DEBUG] flink_client - 鍝嶅簲缁撴灉锛堝墠 500 瀛楃锛? {'jid': '315234093a5a5235987fcdb47fb3c96d', 'name': 'insert-into_default_catalog.default_database.db_source_address_sink,default_catalog.default_database.db_source_order_sink,default_catalog.default_database.db_source_user_sink', 'isStoppable': False, 'state': 'RUNNING', 'start-time': 1772121692796, 'end-time': -1, 'duration': 182783, 'maxParallelism': -1, 'now': 1772121875579, 'timestamps': {'RECONCILING': 0, 'INITIALIZING': 1772121692796, 'FAILING': 0, 'CANCELED': 0, 'RUNNING': 1772121692813, 
+2026-02-27 00:04:35,698 [DEBUG] httpcore.connection - close.started
+2026-02-27 00:04:35,699 [DEBUG] httpcore.connection - close.complete
+2026-02-27 00:04:35,699 [DEBUG] __main__ - 浠?Flink 璇︽儏鑾峰彇: 315234093a5a5235987fcdb47fb3c96d - insert-into_default_catalog.default_database.db_source_address_sink,default_catalog.default_database.db_source_order_sink,default_catalog.default_database.db_source_user_sink, start_time=1772121692796
+2026-02-27 00:04:35,699 [DEBUG] __main__ - From DB: 315234093a5a5235987fcdb47fb3c96d - user_name: 娴嬭瘯鑷畾涔塩heckpoint鐩綍5
+2026-02-27 00:04:35,700 [INFO] __main__ - 杩斿洖 1 涓疄鏃朵綔涓氾紙RUNNING 鐘舵€侊級
+2026-02-27 00:04:43,667 [DEBUG] flink_client - 鍙戦€?HTTP 璇锋眰: GET http://192.168.31.251:8081/jobs
+2026-02-27 00:04:43,667 [DEBUG] flink_client - 鍙傛暟: {}
+2026-02-27 00:04:44,064 [DEBUG] httpcore.connection - connect_tcp.started host='192.168.31.251' port=8081 local_address=None timeout=30.0 socket_options=None
+2026-02-27 00:04:44,070 [DEBUG] flink_client - 鍙戦€?HTTP 璇锋眰: GET http://192.168.31.251:8081/overview
+2026-02-27 00:04:44,070 [DEBUG] flink_client - 鍙傛暟: {}
+2026-02-27 00:04:44,407 [DEBUG] httpcore.connection - connect_tcp.started host='192.168.31.251' port=8081 local_address=None timeout=30.0 socket_options=None
+2026-02-27 00:04:44,412 [DEBUG] flink_client - 鍙戦€?HTTP 璇锋眰: GET http://192.168.31.251:8081/overview
+2026-02-27 00:04:44,412 [DEBUG] flink_client - 鍙傛暟: {}
+2026-02-27 00:04:44,814 [DEBUG] httpcore.connection - connect_tcp.started host='192.168.31.251' port=8081 local_address=None timeout=30.0 socket_options=None
+2026-02-27 00:04:44,819 [DEBUG] flink_client - 鍙戦€?HTTP 璇锋眰: GET http://192.168.31.251:8081/jobs
+2026-02-27 00:04:44,819 [DEBUG] flink_client - 鍙傛暟: {}
+2026-02-27 00:04:45,205 [DEBUG] httpcore.connection - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002933FE72E40>
+2026-02-27 00:04:45,209 [DEBUG] httpcore.connection - connect_tcp.started host='192.168.31.251' port=8081 local_address=None timeout=30.0 socket_options=None
+2026-02-27 00:04:45,213 [DEBUG] httpcore.http11 - send_request_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:45,215 [DEBUG] httpcore.http11 - send_request_headers.complete
+2026-02-27 00:04:45,215 [DEBUG] httpcore.http11 - send_request_body.started request=<Request [b'GET']>
+2026-02-27 00:04:45,215 [DEBUG] httpcore.http11 - send_request_body.complete
+2026-02-27 00:04:45,216 [DEBUG] httpcore.http11 - receive_response_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:45,216 [DEBUG] httpcore.connection - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x00000293347F08C0>
+2026-02-27 00:04:45,221 [DEBUG] httpcore.http11 - send_request_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:45,222 [DEBUG] httpcore.http11 - send_request_headers.complete
+2026-02-27 00:04:45,223 [DEBUG] httpcore.http11 - send_request_body.started request=<Request [b'GET']>
+2026-02-27 00:04:45,223 [DEBUG] httpcore.http11 - send_request_body.complete
+2026-02-27 00:04:45,223 [DEBUG] httpcore.http11 - receive_response_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:45,224 [DEBUG] httpcore.connection - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x00000293347F3480>
+2026-02-27 00:04:45,228 [DEBUG] httpcore.http11 - send_request_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:45,229 [DEBUG] httpcore.http11 - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'content-type', b'application/json; charset=UTF-8'), (b'access-control-allow-origin', b'*'), (b'connection', b'keep-alive'), (b'content-length', b'257')])
+2026-02-27 00:04:45,230 [INFO] httpx - HTTP Request: GET http://192.168.31.251:8081/jobs "HTTP/1.1 200 OK"
+2026-02-27 00:04:45,230 [DEBUG] httpcore.http11 - receive_response_body.started request=<Request [b'GET']>
+2026-02-27 00:04:45,231 [DEBUG] httpcore.http11 - receive_response_body.complete
+2026-02-27 00:04:45,234 [DEBUG] httpcore.http11 - response_closed.started
+2026-02-27 00:04:45,235 [DEBUG] httpcore.http11 - send_request_headers.complete
+2026-02-27 00:04:45,235 [DEBUG] httpcore.http11 - send_request_body.started request=<Request [b'GET']>
+2026-02-27 00:04:45,236 [DEBUG] httpcore.http11 - send_request_body.complete
+2026-02-27 00:04:45,236 [DEBUG] httpcore.http11 - receive_response_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:45,236 [DEBUG] httpcore.http11 - response_closed.complete
+2026-02-27 00:04:45,240 [DEBUG] flink_client - 鍝嶅簲鐘舵€佺爜: 200
+2026-02-27 00:04:45,241 [DEBUG] flink_client - 鍝嶅簲缁撴灉锛堝墠 500 瀛楃锛? {'jobs': [{'id': '31c4ba253338fe8e74ea59b0efd132fd', 'status': 'FINISHED'}, {'id': '2ca98244f096f9f0be7d050b7fa6bd83', 'status': 'FINISHED'}, {'id': '90f346a4514703d8d48a65aabd2ba2fe', 'status': 'FINISHED'}, {'id': '315234093a5a5235987fcdb47fb3c96d', 'status': 'RUNNING'}]}
+2026-02-27 00:04:45,244 [DEBUG] httpcore.connection - close.started
+2026-02-27 00:04:45,245 [DEBUG] httpcore.http11 - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'content-type', b'application/json; charset=UTF-8'), (b'access-control-allow-origin', b'*'), (b'connection', b'keep-alive'), (b'content-length', b'176')])
+2026-02-27 00:04:45,246 [INFO] httpx - HTTP Request: GET http://192.168.31.251:8081/overview "HTTP/1.1 200 OK"
+2026-02-27 00:04:45,246 [DEBUG] httpcore.http11 - receive_response_body.started request=<Request [b'GET']>
+2026-02-27 00:04:45,247 [DEBUG] httpcore.http11 - receive_response_body.complete
+2026-02-27 00:04:45,251 [DEBUG] httpcore.http11 - response_closed.started
+2026-02-27 00:04:45,251 [DEBUG] httpcore.connection - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002933FE5BBB0>
+2026-02-27 00:04:45,257 [DEBUG] httpcore.connection - close.complete
+2026-02-27 00:04:45,258 [INFO] __main__ - 浠?Flink 鑾峰彇鍒?4 涓綔涓?
+2026-02-27 00:04:45,283 [DEBUG] flink_client - 鍙戦€?HTTP 璇锋眰: GET http://192.168.31.251:8081/jobs/315234093a5a5235987fcdb47fb3c96d
+2026-02-27 00:04:45,283 [DEBUG] flink_client - 鍙傛暟: {}
+2026-02-27 00:04:45,621 [DEBUG] httpcore.http11 - response_closed.complete
+2026-02-27 00:04:45,625 [DEBUG] flink_client - 鍝嶅簲鐘舵€佺爜: 200
+2026-02-27 00:04:45,625 [DEBUG] flink_client - 鍝嶅簲缁撴灉锛堝墠 500 瀛楃锛? {'taskmanagers': 1, 'slots-total': 10, 'slots-available': 9, 'jobs-running': 1, 'jobs-finished': 16, 'jobs-cancelled': 3, 'jobs-failed': 8, 'flink-version': '1.18.1', 'flink-commit': 'a8c8b1c'}
+2026-02-27 00:04:45,630 [DEBUG] httpcore.connection - close.started
+2026-02-27 00:04:45,630 [DEBUG] httpcore.http11 - send_request_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:45,631 [DEBUG] httpcore.connection - connect_tcp.started host='192.168.31.251' port=8081 local_address=None timeout=30.0 socket_options=None
+2026-02-27 00:04:45,635 [DEBUG] httpcore.connection - close.complete
+2026-02-27 00:04:45,635 [DEBUG] flink_client - 鍙戦€?HTTP 璇锋眰: GET http://192.168.31.251:8081/jobs
+2026-02-27 00:04:45,636 [DEBUG] flink_client - 鍙傛暟: {}
+2026-02-27 00:04:46,031 [DEBUG] httpcore.http11 - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'content-type', b'application/json; charset=UTF-8'), (b'access-control-allow-origin', b'*'), (b'connection', b'keep-alive'), (b'content-length', b'176')])
+2026-02-27 00:04:46,031 [INFO] httpx - HTTP Request: GET http://192.168.31.251:8081/overview "HTTP/1.1 200 OK"
+2026-02-27 00:04:46,032 [DEBUG] httpcore.http11 - receive_response_body.started request=<Request [b'GET']>
+2026-02-27 00:04:46,032 [DEBUG] httpcore.http11 - receive_response_body.complete
+2026-02-27 00:04:46,036 [DEBUG] httpcore.http11 - response_closed.started
+2026-02-27 00:04:46,037 [DEBUG] httpcore.http11 - send_request_headers.complete
+2026-02-27 00:04:46,037 [DEBUG] httpcore.http11 - send_request_body.started request=<Request [b'GET']>
+2026-02-27 00:04:46,037 [DEBUG] httpcore.http11 - send_request_body.complete
+2026-02-27 00:04:46,037 [DEBUG] httpcore.http11 - receive_response_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:46,038 [DEBUG] httpcore.connection - connect_tcp.started host='192.168.31.251' port=8081 local_address=None timeout=30.0 socket_options=None
+2026-02-27 00:04:46,042 [DEBUG] httpcore.http11 - response_closed.complete
+2026-02-27 00:04:46,047 [DEBUG] flink_client - 鍝嶅簲鐘舵€佺爜: 200
+2026-02-27 00:04:46,047 [DEBUG] flink_client - 鍝嶅簲缁撴灉锛堝墠 500 瀛楃锛? {'taskmanagers': 1, 'slots-total': 10, 'slots-available': 9, 'jobs-running': 1, 'jobs-finished': 16, 'jobs-cancelled': 3, 'jobs-failed': 8, 'flink-version': '1.18.1', 'flink-commit': 'a8c8b1c'}
+2026-02-27 00:04:46,051 [DEBUG] httpcore.connection - close.started
+2026-02-27 00:04:46,052 [DEBUG] httpcore.connection - close.complete
+2026-02-27 00:04:46,053 [DEBUG] flink_client - 鍙戦€?HTTP 璇锋眰: GET http://192.168.31.251:8081/jobs
+2026-02-27 00:04:46,053 [DEBUG] flink_client - 鍙傛暟: {}
+2026-02-27 00:04:46,430 [DEBUG] httpcore.connection - connect_tcp.started host='192.168.31.251' port=8081 local_address=None timeout=30.0 socket_options=None
+2026-02-27 00:04:46,435 [DEBUG] httpcore.http11 - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'content-type', b'application/json; charset=UTF-8'), (b'access-control-allow-origin', b'*'), (b'connection', b'keep-alive'), (b'content-length', b'257')])
+2026-02-27 00:04:46,435 [INFO] httpx - HTTP Request: GET http://192.168.31.251:8081/jobs "HTTP/1.1 200 OK"
+2026-02-27 00:04:46,436 [DEBUG] httpcore.http11 - receive_response_body.started request=<Request [b'GET']>
+2026-02-27 00:04:46,436 [DEBUG] httpcore.http11 - receive_response_body.complete
+2026-02-27 00:04:46,440 [DEBUG] httpcore.http11 - response_closed.started
+2026-02-27 00:04:46,442 [DEBUG] httpcore.http11 - response_closed.complete
+2026-02-27 00:04:46,448 [DEBUG] flink_client - 鍝嶅簲鐘舵€佺爜: 200
+2026-02-27 00:04:46,448 [DEBUG] flink_client - 鍝嶅簲缁撴灉锛堝墠 500 瀛楃锛? {'jobs': [{'id': '31c4ba253338fe8e74ea59b0efd132fd', 'status': 'FINISHED'}, {'id': '2ca98244f096f9f0be7d050b7fa6bd83', 'status': 'FINISHED'}, {'id': '315234093a5a5235987fcdb47fb3c96d', 'status': 'RUNNING'}, {'id': '90f346a4514703d8d48a65aabd2ba2fe', 'status': 'FINISHED'}]}
+2026-02-27 00:04:46,452 [DEBUG] httpcore.connection - close.started
+2026-02-27 00:04:46,453 [DEBUG] httpcore.connection - close.complete
+2026-02-27 00:04:46,453 [INFO] __main__ - 浠?Flink 鑾峰彇鍒?4 涓綔涓?
+2026-02-27 00:04:46,488 [DEBUG] flink_client - 鍙戦€?HTTP 璇锋眰: GET http://192.168.31.251:8081/jobs/315234093a5a5235987fcdb47fb3c96d
+2026-02-27 00:04:46,488 [DEBUG] flink_client - 鍙傛暟: {}
+2026-02-27 00:04:46,898 [DEBUG] httpcore.connection - connect_tcp.started host='192.168.31.251' port=8081 local_address=None timeout=30.0 socket_options=None
+2026-02-27 00:04:46,902 [DEBUG] httpcore.connection - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002933FE5B0C0>
+2026-02-27 00:04:46,906 [DEBUG] httpcore.http11 - send_request_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:46,906 [DEBUG] httpcore.connection - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002933FE5A8A0>
+2026-02-27 00:04:46,913 [DEBUG] httpcore.http11 - send_request_headers.complete
+2026-02-27 00:04:46,914 [DEBUG] httpcore.http11 - send_request_body.started request=<Request [b'GET']>
+2026-02-27 00:04:46,914 [DEBUG] httpcore.http11 - send_request_body.complete
+2026-02-27 00:04:46,914 [DEBUG] httpcore.http11 - receive_response_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:46,915 [DEBUG] httpcore.http11 - send_request_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:46,916 [DEBUG] httpcore.http11 - send_request_headers.complete
+2026-02-27 00:04:46,916 [DEBUG] httpcore.http11 - send_request_body.started request=<Request [b'GET']>
+2026-02-27 00:04:46,917 [DEBUG] httpcore.http11 - send_request_body.complete
+2026-02-27 00:04:46,917 [DEBUG] httpcore.http11 - receive_response_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:46,917 [DEBUG] httpcore.connection - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002933FE5A4E0>
+2026-02-27 00:04:46,921 [DEBUG] httpcore.http11 - send_request_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:46,922 [DEBUG] httpcore.http11 - send_request_headers.complete
+2026-02-27 00:04:46,923 [DEBUG] httpcore.http11 - send_request_body.started request=<Request [b'GET']>
+2026-02-27 00:04:46,923 [DEBUG] httpcore.http11 - send_request_body.complete
+2026-02-27 00:04:46,924 [DEBUG] httpcore.http11 - receive_response_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:46,924 [DEBUG] httpcore.connection - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002933FE70AA0>
+2026-02-27 00:04:46,929 [DEBUG] httpcore.http11 - send_request_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:46,930 [DEBUG] httpcore.http11 - send_request_headers.complete
+2026-02-27 00:04:46,930 [DEBUG] httpcore.http11 - send_request_body.started request=<Request [b'GET']>
+2026-02-27 00:04:46,931 [DEBUG] httpcore.http11 - send_request_body.complete
+2026-02-27 00:04:46,931 [DEBUG] httpcore.http11 - receive_response_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:46,932 [DEBUG] httpcore.http11 - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'content-type', b'application/json; charset=UTF-8'), (b'access-control-allow-origin', b'*'), (b'connection', b'keep-alive'), (b'content-length', b'257')])
+2026-02-27 00:04:46,932 [INFO] httpx - HTTP Request: GET http://192.168.31.251:8081/jobs "HTTP/1.1 200 OK"
+2026-02-27 00:04:46,933 [DEBUG] httpcore.http11 - receive_response_body.started request=<Request [b'GET']>
+2026-02-27 00:04:46,933 [DEBUG] httpcore.http11 - receive_response_body.complete
+2026-02-27 00:04:46,937 [DEBUG] httpcore.http11 - response_closed.started
+2026-02-27 00:04:46,937 [DEBUG] httpcore.http11 - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'content-type', b'application/json; charset=UTF-8'), (b'access-control-allow-origin', b'*'), (b'connection', b'keep-alive'), (b'content-length', b'4528')])
+2026-02-27 00:04:46,938 [INFO] httpx - HTTP Request: GET http://192.168.31.251:8081/jobs/315234093a5a5235987fcdb47fb3c96d "HTTP/1.1 200 OK"
+2026-02-27 00:04:46,939 [DEBUG] httpcore.http11 - receive_response_body.started request=<Request [b'GET']>
+2026-02-27 00:04:46,939 [DEBUG] httpcore.http11 - receive_response_body.complete
+2026-02-27 00:04:46,943 [DEBUG] httpcore.http11 - response_closed.started
+2026-02-27 00:04:46,944 [DEBUG] httpcore.http11 - response_closed.complete
+2026-02-27 00:04:46,950 [DEBUG] flink_client - 鍝嶅簲鐘舵€佺爜: 200
+2026-02-27 00:04:46,950 [DEBUG] flink_client - 鍝嶅簲缁撴灉锛堝墠 500 瀛楃锛? {'jobs': [{'id': '315234093a5a5235987fcdb47fb3c96d', 'status': 'RUNNING'}, {'id': '31c4ba253338fe8e74ea59b0efd132fd', 'status': 'FINISHED'}, {'id': '2ca98244f096f9f0be7d050b7fa6bd83', 'status': 'FINISHED'}, {'id': '90f346a4514703d8d48a65aabd2ba2fe', 'status': 'FINISHED'}]}
+2026-02-27 00:04:46,955 [DEBUG] httpcore.connection - close.started
+2026-02-27 00:04:46,955 [DEBUG] httpcore.http11 - response_closed.complete
+2026-02-27 00:04:46,959 [DEBUG] flink_client - 鍝嶅簲鐘舵€佺爜: 200
+2026-02-27 00:04:46,959 [DEBUG] flink_client - 鍝嶅簲缁撴灉锛堝墠 500 瀛楃锛? {'jid': '315234093a5a5235987fcdb47fb3c96d', 'name': 'insert-into_default_catalog.default_database.db_source_address_sink,default_catalog.default_database.db_source_order_sink,default_catalog.default_database.db_source_user_sink', 'isStoppable': False, 'state': 'RUNNING', 'start-time': 1772121692796, 'end-time': -1, 'duration': 194022, 'maxParallelism': -1, 'now': 1772121886818, 'timestamps': {'RECONCILING': 0, 'INITIALIZING': 1772121692796, 'FAILING': 0, 'CANCELED': 0, 'RUNNING': 1772121692813, 
+2026-02-27 00:04:46,965 [DEBUG] httpcore.connection - close.started
+2026-02-27 00:04:46,966 [DEBUG] httpcore.connection - close.complete
+2026-02-27 00:04:46,968 [DEBUG] httpcore.connection - close.complete
+2026-02-27 00:04:46,968 [DEBUG] __main__ - 浠?Flink 璇︽儏鑾峰彇: 315234093a5a5235987fcdb47fb3c96d - insert-into_default_catalog.default_database.db_source_address_sink,default_catalog.default_database.db_source_order_sink,default_catalog.default_database.db_source_user_sink, start_time=1772121692796
+2026-02-27 00:04:46,969 [DEBUG] __main__ - From DB: 315234093a5a5235987fcdb47fb3c96d - user_name: 娴嬭瘯鑷畾涔塩heckpoint鐩綍5
+2026-02-27 00:04:46,969 [INFO] __main__ - 杩斿洖 1 涓疄鏃朵綔涓氾紙RUNNING 鐘舵€侊級
+2026-02-27 00:04:46,971 [DEBUG] httpcore.http11 - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'content-type', b'application/json; charset=UTF-8'), (b'access-control-allow-origin', b'*'), (b'connection', b'keep-alive'), (b'content-length', b'257')])
+2026-02-27 00:04:46,972 [INFO] httpx - HTTP Request: GET http://192.168.31.251:8081/jobs "HTTP/1.1 200 OK"
+2026-02-27 00:04:46,972 [DEBUG] httpcore.http11 - receive_response_body.started request=<Request [b'GET']>
+2026-02-27 00:04:46,972 [DEBUG] httpcore.http11 - receive_response_body.complete
+2026-02-27 00:04:46,976 [DEBUG] httpcore.http11 - response_closed.started
+2026-02-27 00:04:46,977 [DEBUG] httpcore.http11 - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'content-type', b'application/json; charset=UTF-8'), (b'access-control-allow-origin', b'*'), (b'connection', b'keep-alive'), (b'content-length', b'4528')])
+2026-02-27 00:04:46,978 [INFO] httpx - HTTP Request: GET http://192.168.31.251:8081/jobs/315234093a5a5235987fcdb47fb3c96d "HTTP/1.1 200 OK"
+2026-02-27 00:04:46,979 [DEBUG] httpcore.http11 - receive_response_body.started request=<Request [b'GET']>
+2026-02-27 00:04:46,979 [DEBUG] httpcore.http11 - receive_response_body.complete
+2026-02-27 00:04:46,983 [DEBUG] httpcore.http11 - response_closed.started
+2026-02-27 00:04:46,984 [DEBUG] httpcore.http11 - response_closed.complete
+2026-02-27 00:04:46,989 [DEBUG] flink_client - 鍝嶅簲鐘舵€佺爜: 200
+2026-02-27 00:04:46,989 [DEBUG] flink_client - 鍝嶅簲缁撴灉锛堝墠 500 瀛楃锛? {'jobs': [{'id': '31c4ba253338fe8e74ea59b0efd132fd', 'status': 'FINISHED'}, {'id': '2ca98244f096f9f0be7d050b7fa6bd83', 'status': 'FINISHED'}, {'id': '315234093a5a5235987fcdb47fb3c96d', 'status': 'RUNNING'}, {'id': '90f346a4514703d8d48a65aabd2ba2fe', 'status': 'FINISHED'}]}
+2026-02-27 00:04:46,993 [DEBUG] httpcore.connection - close.started
+2026-02-27 00:04:46,994 [DEBUG] httpcore.http11 - response_closed.complete
+2026-02-27 00:04:47,000 [DEBUG] flink_client - 鍝嶅簲鐘舵€佺爜: 200
+2026-02-27 00:04:47,000 [DEBUG] flink_client - 鍝嶅簲缁撴灉锛堝墠 500 瀛楃锛? {'jid': '315234093a5a5235987fcdb47fb3c96d', 'name': 'insert-into_default_catalog.default_database.db_source_address_sink,default_catalog.default_database.db_source_order_sink,default_catalog.default_database.db_source_user_sink', 'isStoppable': False, 'state': 'RUNNING', 'start-time': 1772121692796, 'end-time': -1, 'duration': 194036, 'maxParallelism': -1, 'now': 1772121886832, 'timestamps': {'RECONCILING': 0, 'INITIALIZING': 1772121692796, 'FAILING': 0, 'CANCELED': 0, 'RUNNING': 1772121692813, 
+2026-02-27 00:04:47,004 [DEBUG] httpcore.connection - close.started
+2026-02-27 00:04:47,005 [DEBUG] httpcore.connection - close.complete
+2026-02-27 00:04:47,006 [DEBUG] httpcore.connection - close.complete
+2026-02-27 00:04:47,007 [DEBUG] __main__ - 浠?Flink 璇︽儏鑾峰彇: 315234093a5a5235987fcdb47fb3c96d - insert-into_default_catalog.default_database.db_source_address_sink,default_catalog.default_database.db_source_order_sink,default_catalog.default_database.db_source_user_sink, start_time=1772121692796
+2026-02-27 00:04:47,007 [DEBUG] __main__ - From DB: 315234093a5a5235987fcdb47fb3c96d - user_name: 娴嬭瘯鑷畾涔塩heckpoint鐩綍5
+2026-02-27 00:04:47,007 [INFO] __main__ - 杩斿洖 1 涓疄鏃朵綔涓氾紙RUNNING 鐘舵€侊級
+2026-02-27 00:04:54,012 [DEBUG] flink_client - 鍙戦€?HTTP 璇锋眰: GET http://192.168.31.251:8081/overview
+2026-02-27 00:04:54,012 [DEBUG] flink_client - 鍙傛暟: {}
+2026-02-27 00:04:54,374 [DEBUG] httpcore.connection - connect_tcp.started host='192.168.31.251' port=8081 local_address=None timeout=30.0 socket_options=None
+2026-02-27 00:04:54,382 [DEBUG] httpcore.connection - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x00000293347F2530>
+2026-02-27 00:04:54,387 [DEBUG] httpcore.http11 - send_request_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:54,387 [DEBUG] httpcore.http11 - send_request_headers.complete
+2026-02-27 00:04:54,388 [DEBUG] httpcore.http11 - send_request_body.started request=<Request [b'GET']>
+2026-02-27 00:04:54,388 [DEBUG] httpcore.http11 - send_request_body.complete
+2026-02-27 00:04:54,388 [DEBUG] httpcore.http11 - receive_response_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:54,392 [DEBUG] httpcore.http11 - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'content-type', b'application/json; charset=UTF-8'), (b'access-control-allow-origin', b'*'), (b'connection', b'keep-alive'), (b'content-length', b'176')])
+2026-02-27 00:04:54,393 [INFO] httpx - HTTP Request: GET http://192.168.31.251:8081/overview "HTTP/1.1 200 OK"
+2026-02-27 00:04:54,393 [DEBUG] httpcore.http11 - receive_response_body.started request=<Request [b'GET']>
+2026-02-27 00:04:54,393 [DEBUG] httpcore.http11 - receive_response_body.complete
+2026-02-27 00:04:54,397 [DEBUG] httpcore.http11 - response_closed.started
+2026-02-27 00:04:54,398 [DEBUG] httpcore.http11 - response_closed.complete
+2026-02-27 00:04:54,402 [DEBUG] flink_client - 鍝嶅簲鐘舵€佺爜: 200
+2026-02-27 00:04:54,402 [DEBUG] flink_client - 鍝嶅簲缁撴灉锛堝墠 500 瀛楃锛? {'taskmanagers': 1, 'slots-total': 10, 'slots-available': 9, 'jobs-running': 1, 'jobs-finished': 16, 'jobs-cancelled': 3, 'jobs-failed': 8, 'flink-version': '1.18.1', 'flink-commit': 'a8c8b1c'}
+2026-02-27 00:04:54,406 [DEBUG] httpcore.connection - close.started
+2026-02-27 00:04:54,407 [DEBUG] httpcore.connection - close.complete
+2026-02-27 00:04:54,407 [DEBUG] flink_client - 鍙戦€?HTTP 璇锋眰: GET http://192.168.31.251:8081/jobs
+2026-02-27 00:04:54,407 [DEBUG] flink_client - 鍙傛暟: {}
+2026-02-27 00:04:54,750 [DEBUG] httpcore.connection - connect_tcp.started host='192.168.31.251' port=8081 local_address=None timeout=30.0 socket_options=None
+2026-02-27 00:04:54,755 [DEBUG] flink_client - 鍙戦€?HTTP 璇锋眰: GET http://192.168.31.251:8081/jobs
+2026-02-27 00:04:54,755 [DEBUG] flink_client - 鍙傛暟: {}
+2026-02-27 00:04:55,113 [DEBUG] httpcore.connection - connect_tcp.started host='192.168.31.251' port=8081 local_address=None timeout=30.0 socket_options=None
+2026-02-27 00:04:55,119 [DEBUG] httpcore.connection - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002933FE5B980>
+2026-02-27 00:04:55,124 [DEBUG] httpcore.http11 - send_request_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:55,125 [DEBUG] httpcore.http11 - send_request_headers.complete
+2026-02-27 00:04:55,126 [DEBUG] httpcore.http11 - send_request_body.started request=<Request [b'GET']>
+2026-02-27 00:04:55,126 [DEBUG] httpcore.http11 - send_request_body.complete
+2026-02-27 00:04:55,126 [DEBUG] httpcore.http11 - receive_response_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:55,127 [DEBUG] httpcore.connection - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002933FE5AE40>
+2026-02-27 00:04:55,133 [DEBUG] httpcore.http11 - send_request_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:55,134 [DEBUG] httpcore.http11 - send_request_headers.complete
+2026-02-27 00:04:55,134 [DEBUG] httpcore.http11 - send_request_body.started request=<Request [b'GET']>
+2026-02-27 00:04:55,135 [DEBUG] httpcore.http11 - send_request_body.complete
+2026-02-27 00:04:55,135 [DEBUG] httpcore.http11 - receive_response_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:55,135 [DEBUG] httpcore.http11 - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'content-type', b'application/json; charset=UTF-8'), (b'access-control-allow-origin', b'*'), (b'connection', b'keep-alive'), (b'content-length', b'257')])
+2026-02-27 00:04:55,136 [INFO] httpx - HTTP Request: GET http://192.168.31.251:8081/jobs "HTTP/1.1 200 OK"
+2026-02-27 00:04:55,136 [DEBUG] httpcore.http11 - receive_response_body.started request=<Request [b'GET']>
+2026-02-27 00:04:55,137 [DEBUG] httpcore.http11 - receive_response_body.complete
+2026-02-27 00:04:55,141 [DEBUG] httpcore.http11 - response_closed.started
+2026-02-27 00:04:55,142 [DEBUG] httpcore.http11 - response_closed.complete
+2026-02-27 00:04:55,146 [DEBUG] flink_client - 鍝嶅簲鐘舵€佺爜: 200
+2026-02-27 00:04:55,147 [DEBUG] flink_client - 鍝嶅簲缁撴灉锛堝墠 500 瀛楃锛? {'jobs': [{'id': '315234093a5a5235987fcdb47fb3c96d', 'status': 'RUNNING'}, {'id': '31c4ba253338fe8e74ea59b0efd132fd', 'status': 'FINISHED'}, {'id': '2ca98244f096f9f0be7d050b7fa6bd83', 'status': 'FINISHED'}, {'id': '90f346a4514703d8d48a65aabd2ba2fe', 'status': 'FINISHED'}]}
+2026-02-27 00:04:55,151 [DEBUG] httpcore.connection - close.started
+2026-02-27 00:04:55,152 [DEBUG] httpcore.connection - close.complete
+2026-02-27 00:04:55,154 [DEBUG] httpcore.http11 - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'content-type', b'application/json; charset=UTF-8'), (b'access-control-allow-origin', b'*'), (b'connection', b'keep-alive'), (b'content-length', b'257')])
+2026-02-27 00:04:55,155 [INFO] httpx - HTTP Request: GET http://192.168.31.251:8081/jobs "HTTP/1.1 200 OK"
+2026-02-27 00:04:55,156 [DEBUG] httpcore.http11 - receive_response_body.started request=<Request [b'GET']>
+2026-02-27 00:04:55,157 [DEBUG] httpcore.http11 - receive_response_body.complete
+2026-02-27 00:04:55,160 [DEBUG] httpcore.http11 - response_closed.started
+2026-02-27 00:04:55,161 [DEBUG] httpcore.http11 - response_closed.complete
+2026-02-27 00:04:55,168 [DEBUG] flink_client - 鍝嶅簲鐘舵€佺爜: 200
+2026-02-27 00:04:55,169 [DEBUG] flink_client - 鍝嶅簲缁撴灉锛堝墠 500 瀛楃锛? {'jobs': [{'id': '31c4ba253338fe8e74ea59b0efd132fd', 'status': 'FINISHED'}, {'id': '2ca98244f096f9f0be7d050b7fa6bd83', 'status': 'FINISHED'}, {'id': '315234093a5a5235987fcdb47fb3c96d', 'status': 'RUNNING'}, {'id': '90f346a4514703d8d48a65aabd2ba2fe', 'status': 'FINISHED'}]}
+2026-02-27 00:04:55,173 [DEBUG] httpcore.connection - close.started
+2026-02-27 00:04:55,173 [DEBUG] httpcore.connection - close.complete
+2026-02-27 00:04:55,174 [INFO] __main__ - 浠?Flink 鑾峰彇鍒?4 涓綔涓?
+2026-02-27 00:04:55,212 [DEBUG] flink_client - 鍙戦€?HTTP 璇锋眰: GET http://192.168.31.251:8081/jobs/315234093a5a5235987fcdb47fb3c96d
+2026-02-27 00:04:55,213 [DEBUG] flink_client - 鍙傛暟: {}
+2026-02-27 00:04:55,634 [DEBUG] httpcore.connection - connect_tcp.started host='192.168.31.251' port=8081 local_address=None timeout=30.0 socket_options=None
+2026-02-27 00:04:55,643 [DEBUG] httpcore.connection - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002933FE5A3F0>
+2026-02-27 00:04:55,647 [DEBUG] httpcore.http11 - send_request_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:55,648 [DEBUG] httpcore.http11 - send_request_headers.complete
+2026-02-27 00:04:55,648 [DEBUG] httpcore.http11 - send_request_body.started request=<Request [b'GET']>
+2026-02-27 00:04:55,649 [DEBUG] httpcore.http11 - send_request_body.complete
+2026-02-27 00:04:55,649 [DEBUG] httpcore.http11 - receive_response_headers.started request=<Request [b'GET']>
+2026-02-27 00:04:55,653 [DEBUG] httpcore.http11 - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'content-type', b'application/json; charset=UTF-8'), (b'access-control-allow-origin', b'*'), (b'connection', b'keep-alive'), (b'content-length', b'4528')])
+2026-02-27 00:04:55,654 [INFO] httpx - HTTP Request: GET http://192.168.31.251:8081/jobs/315234093a5a5235987fcdb47fb3c96d "HTTP/1.1 200 OK"
+2026-02-27 00:04:55,654 [DEBUG] httpcore.http11 - receive_response_body.started request=<Request [b'GET']>
+2026-02-27 00:04:55,655 [DEBUG] httpcore.http11 - receive_response_body.complete
+2026-02-27 00:04:55,659 [DEBUG] httpcore.http11 - response_closed.started
+2026-02-27 00:04:55,659 [DEBUG] httpcore.http11 - response_closed.complete
+2026-02-27 00:04:55,663 [DEBUG] flink_client - 鍝嶅簲鐘舵€佺爜: 200
+2026-02-27 00:04:55,664 [DEBUG] flink_client - 鍝嶅簲缁撴灉锛堝墠 500 瀛楃锛? {'jid': '315234093a5a5235987fcdb47fb3c96d', 'name': 'insert-into_default_catalog.default_database.db_source_address_sink,default_catalog.default_database.db_source_order_sink,default_catalog.default_database.db_source_user_sink', 'isStoppable': False, 'state': 'RUNNING', 'start-time': 1772121692796, 'end-time': -1, 'duration': 202753, 'maxParallelism': -1, 'now': 1772121895549, 'timestamps': {'RECONCILING': 0, 'INITIALIZING': 1772121692796, 'FAILING': 0, 'CANCELED': 0, 'RUNNING': 1772121692813, 
+2026-02-27 00:04:55,669 [DEBUG] httpcore.connection - close.started
+2026-02-27 00:04:55,669 [DEBUG] httpcore.connection - close.complete
+2026-02-27 00:04:55,670 [DEBUG] __main__ - 浠?Flink 璇︽儏鑾峰彇: 315234093a5a5235987fcdb47fb3c96d - insert-into_default_catalog.default_database.db_source_address_sink,default_catalog.default_database.db_source_order_sink,default_catalog.default_database.db_source_user_sink, start_time=1772121692796
+2026-02-27 00:04:55,670 [DEBUG] __main__ - From DB: 315234093a5a5235987fcdb47fb3c96d - user_name: 娴嬭瘯鑷畾涔塩heckpoint鐩綍5
+2026-02-27 00:04:55,670 [INFO] __main__ - 杩斿洖 1 涓疄鏃朵綔涓氾紙RUNNING 鐘舵€侊級
+2026-02-27 00:05:01,259 [INFO] __main__ - 姝ｅ湪鍏抽棴鏁版嵁搴撹繛鎺?..
+2026-02-27 00:05:01,260 [INFO] __main__ - 鏁版嵁搴撹繛鎺ュ凡鍏抽棴

@@ -2,6 +2,27 @@
 
 Flink Manager 是一个低代码的 Apache Flink SQL 可视化配置管理平台，通过图形化界面简化实时计算作业的开发、部署和运维。无需手动编写复杂的 Flink SQL 和连接器配置，只需通过表单选择即可快速构建实时数据集成任务。
 
+## 仅需三步，完成一个Flink SQL作业配置
+
+### 第一步：配置源表
+选择连接器类型（如 MySQL CDC、Kafka 等），选择数据源，然后选择要同步的表。系统会自动获取表结构和字段信息。
+
+![描述](./pic/源表配置.png)
+
+### 第二步：配置汇表
+选择目标连接器（如 Doris、StarRocks、ClickHouse 等），配置目标表信息。支持自动建表，系统会根据源表结构自动生成建表语句。
+
+![描述](./pic/汇表配置.png)
+
+### 第三步：查询配置
+预览生成的 Flink SQL，确认无误后一键提交到 Flink 集群。作业开始运行后，可在实时作业页面监控状态。
+
+![描述](./pic/查询配置.png)
+
+![描述](./pic/SQL预览.png)
+
+> 整个过程无需编写任何 SQL 代码，所有配置通过表单完成，大幅降低 Flink 实时计算的开发门槛。
+
 ## 核心特性
 
 ### 低代码可视化配置
@@ -33,7 +54,7 @@ Flink Manager 是一个低代码的 Apache Flink SQL 可视化配置管理平台
 | Oracle CDC | 支持 Service Name 配置 |
 | TiDB CDC | 未进行深入测试，进行中 |
 | OceanBase CDC | 未进行深入测试，进行中 |
-| Kafka | 未进行深入测试，进行中 |
+| Kafka | 支持 Topic 自动发现、Schema 推断、5种启动模式 |
 | JDBC | 支持主流关系型数据库 |
 
 #### 汇表 (Sink)
@@ -42,7 +63,7 @@ Flink Manager 是一个低代码的 Apache Flink SQL 可视化配置管理平台
 | Doris | 支持 UNIQUE/AGGREGATE/DUPLICATE 表类型，自动建表 |
 | StarRocks | 支持主键/聚合/明细表，自动建表 |
 | ClickHouse | 支持 MergeTree 引擎，自动建表 |
-| Kafka | 未进行深入测试，进行中 |
+| Kafka | 支持 JSON/Avro 格式，Topic 自动发现 |
 | MySQL JDBC | 支持批量写入优化 |
 | PostgreSQL JDBC | 支持自动类型映射 |
 | Oracle JDBC | 支持 NUMBER/VARCHAR2 类型 |
@@ -50,6 +71,21 @@ Flink Manager 是一个低代码的 Apache Flink SQL 可视化配置管理平台
 | FileSystem | 支持 CSV/JSON/Parquet 格式 |
 
 ### 高级功能
+
+#### Kafka 实时同步
+
+- **Topic 自动发现**：自动获取 Kafka 集群中现有的 Topic 列表，支持多选
+
+- **Schema 自动推断**：从 Kafka 消息体自动推断字段结构，支持 JSON 格式解析
+
+- **启动模式配置**：支持 5 种 Kafka 消费启动模式
+  - `earliest-offset`：从头开始消费所有现存数据
+  - `latest-offset`：只消费任务启动后新进入的消息（默认）
+  - `group-offsets`：从消费组记录的位点继续消费
+  - `timestamp`：从指定时间点开始消费（支持日期选择器）
+  - `specific-offsets`：精确到每个分区的 Offset
+
+- **参数配置**：时间戳模式支持日期选择器，特定位点模式支持分区偏移量配置
 
 #### 自动建表
 - 根据源表结构自动生成目标表 DDL
@@ -73,7 +109,6 @@ Flink Manager 是一个低代码的 Apache Flink SQL 可视化配置管理平台
 
   ![描述](./pic/4.png)
 
-  ![描述](./pic/5.png)
 
 #### 攒批优化
 - 支持配置批量大小和刷新间隔
@@ -108,6 +143,22 @@ Flink Manager 是一个低代码的 Apache Flink SQL 可视化配置管理平台
   ![描述](./pic/实时作业管理.png)
 
   ![描述](./pic/历史作业管理.png)
+
+### Checkpoint 持久化与作业恢复
+
+- **Checkpoint 自动同步**：后台定时同步运行中作业的 Checkpoint 状态，持久化存储到数据库
+
+- **异常自动检测**：自动检测作业异常退出，同步失败的 Checkpoint 信息
+
+- **一键恢复**：从历史作业列表一键恢复失败作业，自动从最近成功的 Checkpoint 恢复
+
+- **断点续传**：支持从指定 Checkpoint 路径恢复作业，确保数据不丢失、不重复
+
+- **历史记录**：保存所有 Checkpoint 记录，包括触发时间、完成时间、状态、大小等
+
+- **状态追踪**：实时追踪作业状态变化，自动更新数据库中的作业信息
+
+  ![描述](./pic/checkpoint恢复.png)
 
 ### 数据源管理
 

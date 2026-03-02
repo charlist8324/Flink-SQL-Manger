@@ -1,0 +1,1 @@
+file:/home/flink-1.18.1/checkpoint/savepoints/savepoint-04828f-a6709084d016

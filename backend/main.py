@@ -45,7 +45,7 @@ from schemas import (
 )
 from flink_client import flink_client, FlinkClient
 from sqlalchemy import create_engine, inspect, text
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from urllib.parse import quote_plus
 
 class DatabaseConnectionRequest(BaseModel):
@@ -67,6 +67,10 @@ async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时初始化数据库
     logger.info("正在初始化数据库连接...")
+    
+    # 后台任务引用
+    checkpoint_sync_task = None
+    
     try:
         db_manager.initialize()
         
@@ -89,6 +93,99 @@ async def lifespan(app: FastAPI):
                 session.execute(text("ALTER TABLE flink_savepoints ADD COLUMN timestamp BIGINT COMMENT '时间戳(毫秒)'"))
                 session.commit()
                 logger.info("✅ timestamp 字段已添加")
+            
+            # 3. 检查 flink_checkpoints 表是否存在
+            result = session.execute(text("SHOW TABLES LIKE 'flink_checkpoints'"))
+            if not result.fetchone():
+                logger.info("⚠️ flink_checkpoints 表不存在，正在创建...")
+                session.execute(text("""
+                    CREATE TABLE flink_checkpoints (
+                        id INT AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+                        job_id VARCHAR(50) NOT NULL COMMENT '作业ID',
+                        checkpoint_id BIGINT NOT NULL COMMENT 'Checkpoint ID',
+                        checkpoint_path VARCHAR(500) NOT NULL COMMENT 'Checkpoint路径',
+                        status VARCHAR(20) DEFAULT 'COMPLETED' COMMENT '状态: COMPLETED, IN_PROGRESS, FAILED',
+                        trigger_time BIGINT COMMENT '触发时间(毫秒)',
+                        finish_time BIGINT COMMENT '完成时间(毫秒)',
+                        checkpoint_size BIGINT COMMENT 'Checkpoint大小(字节)',
+                        duration INT COMMENT '耗时(毫秒)',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                        INDEX idx_job_id (job_id),
+                        INDEX idx_checkpoint_id (checkpoint_id)
+                    ) COMMENT='Checkpoint记录表'
+                """))
+                session.commit()
+                logger.info("✅ flink_checkpoints 表已创建")
+            
+            # 4. 删除 data_sources 表中不再需要的 Kafka 字段
+            kafka_columns_to_drop = [
+                'kafka_bootstrap_servers',
+                'kafka_topic', 
+                'kafka_group_id',
+                'kafka_sasl_mechanism',
+                'kafka_sasl_username',
+                'kafka_sasl_password'
+            ]
+            
+            for col_name in kafka_columns_to_drop:
+                result = session.execute(text(f"SHOW COLUMNS FROM data_sources LIKE '{col_name}'"))
+                if result.fetchone():
+                    logger.info(f"⚠️ 删除 data_sources 表中不再需要的字段: {col_name}...")
+                    session.execute(text(f"ALTER TABLE data_sources DROP COLUMN {col_name}"))
+                    session.commit()
+                    logger.info(f"✅ {col_name} 字段已删除")
+            
+            # 5. 创建 kafka_jobs 表（Kafka同步作业配置）
+            result = session.execute(text("SHOW TABLES LIKE 'kafka_jobs'"))
+            if not result.fetchone():
+                logger.info("⚠️ kafka_jobs 表不存在，正在创建...")
+                session.execute(text("""
+                    CREATE TABLE kafka_jobs (
+                        id INT AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+                        job_name VARCHAR(100) NOT NULL UNIQUE COMMENT '作业名称',
+                        job_type VARCHAR(20) DEFAULT 'kafka_to_db' COMMENT '作业类型',
+                        source_datasource_id INT NOT NULL COMMENT '源数据源ID',
+                        source_topics VARCHAR(500) NOT NULL COMMENT 'Kafka Topic列表',
+                        source_group_id VARCHAR(200) NULL COMMENT '消费者组ID',
+                        source_start_mode VARCHAR(20) DEFAULT 'latest' COMMENT '启动模式',
+                        source_timestamp BIGINT NULL COMMENT '起始时间戳',
+                        source_format VARCHAR(20) DEFAULT 'json' COMMENT '数据格式',
+                        source_schema JSON NULL COMMENT '源数据Schema',
+                        target_datasource_id INT NOT NULL COMMENT '目标数据源ID',
+                        target_table VARCHAR(100) NOT NULL COMMENT '目标表名',
+                        target_database VARCHAR(100) NULL COMMENT '目标数据库名',
+                        auto_create_table TINYINT(1) DEFAULT 1 COMMENT '是否自动建表',
+                        table_primary_keys VARCHAR(200) NULL COMMENT '主键字段',
+                        field_mappings JSON NULL COMMENT '字段映射配置',
+                        parallelism INT DEFAULT 1 COMMENT '并行度',
+                        checkpoint_interval INT DEFAULT 60000 COMMENT 'Checkpoint间隔',
+                        flink_job_id VARCHAR(50) NULL COMMENT 'Flink作业ID',
+                        state VARCHAR(20) DEFAULT 'CREATED' COMMENT '作业状态',
+                        last_error TEXT NULL COMMENT '最后错误信息',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                        INDEX idx_state (state),
+                        INDEX idx_flink_job_id (flink_job_id)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Kafka同步作业配置表'
+                """))
+                session.commit()
+                logger.info("✅ kafka_jobs 表已创建")
+            
+            # 6. 修改 data_sources 表的 host 和 port 字段为可空
+            result = session.execute(text("SHOW COLUMNS FROM data_sources LIKE 'host'"))
+            row = result.fetchone()
+            if row and 'NO' in str(row):
+                logger.info("⚠️ 修改 data_sources.host 为可空...")
+                session.execute(text("ALTER TABLE data_sources MODIFY COLUMN host VARCHAR(255) NULL COMMENT '主机地址'"))
+                session.commit()
+            
+            result = session.execute(text("SHOW COLUMNS FROM data_sources LIKE 'port'"))
+            row = result.fetchone()
+            if row and 'NO' in str(row):
+                logger.info("⚠️ 修改 data_sources.port 为可空...")
+                session.execute(text("ALTER TABLE data_sources MODIFY COLUMN port INT NULL COMMENT '端口'"))
+                session.commit()
                 
         except Exception as e:
             logger.error(f"❌ Schema 检查/修复失败: {e}")
@@ -97,6 +194,126 @@ async def lifespan(app: FastAPI):
             session.close()
             
         logger.info("✅ 数据库初始化成功")
+        
+        # 启动后台任务：定期同步Checkpoint状态
+        import asyncio
+        from db_operations import get_flink_config, save_checkpoint, get_all_jobs
+        
+        async def sync_checkpoints():
+            """定期同步Checkpoint状态到数据库"""
+            while True:
+                try:
+                    # 获取checkpoint同步间隔配置（默认30秒）
+                    sync_interval_str = get_flink_config("checkpoint_sync_interval")
+                    sync_interval = int(sync_interval_str) if sync_interval_str else 30
+                    
+                    logger.info(f"🔄 开始同步Checkpoint状态...")
+                    
+                    # 获取所有运行中的作业
+                    running_jobs = get_all_jobs(limit=1000)
+                    running_jobs = [job for job in running_jobs if job.get("state") == "RUNNING"]
+                    
+                    logger.info(f"找到 {len(running_jobs)} 个运行中的作业")
+                    
+                    for job in running_jobs:
+                        job_id = job.get("job_id")
+                        if not job_id:
+                            continue
+                        
+                        try:
+                            # 从Flink REST API获取checkpoint信息
+                            checkpoints_info = await flink_client.get_job_checkpoints(job_id)
+                            
+                            if checkpoints_info and "history" in checkpoints_info:
+                                history = checkpoints_info["history"]
+                                
+                                logger.info(f"作业 {job_id}: history数量={len(history)}")
+                                
+                                # 从history中获取id最大的checkpoint（最新的）
+                                if history and len(history) > 0:
+                                    # 按id排序，取最大的
+                                    latest_checkpoint = max(history, key=lambda x: x.get("id", 0))
+                                    latest_id = latest_checkpoint.get("id")
+                                    
+                                    logger.info(f"作业 {job_id}: 找到最新Checkpoint #{latest_id}")
+                                    
+                                    # 打印完整的checkpoint数据结构
+                                    logger.info(f"Checkpoint完整数据: {latest_checkpoint}")
+                                    
+                                    cp_id = latest_checkpoint.get("id")
+                                    cp_path = latest_checkpoint.get("path")
+                                    
+                                    # 如果没有path字段，尝试从external_path获取
+                                    if not cp_path:
+                                        cp_path = latest_checkpoint.get("external_path")
+                                    
+                                    # 如果还是没有路径，跳过保存，保留数据库已有记录
+                                    if not cp_path:
+                                        logger.warning(f"⚠️ 无法从API获取Checkpoint路径，保留数据库已有记录")
+                                        continue
+                                    
+                                    logger.info(f"Checkpoint #{cp_id}: path={cp_path}")
+                                    
+                                    cp_status = latest_checkpoint.get("status", "COMPLETED")
+                                    
+                                    # 转换时间戳（毫秒）
+                                    trigger_time = int(latest_checkpoint.get("trigger_timestamp", 0))
+                                    
+                                    # 获取完成时间和大小
+                                    finish_time = None
+                                    checkpoint_size = None
+                                    duration = None
+                                    
+                                    if "latest_ack_timestamp" in latest_checkpoint:
+                                        finish_time = int(latest_checkpoint.get("latest_ack_timestamp", 0))
+                                    
+                                    if "checkpointed_size" in latest_checkpoint:
+                                        checkpoint_size = int(latest_checkpoint.get("checkpointed_size", 0))
+                                    
+                                    if "end_to_end_duration" in latest_checkpoint:
+                                        duration = int(latest_checkpoint.get("end_to_end_duration", 0))
+                                    
+                                    # 保存到数据库
+                                    if cp_path:
+                                        result = save_checkpoint(
+                                            job_id=job_id,
+                                            checkpoint_id=cp_id,
+                                            checkpoint_path=cp_path,
+                                            trigger_time=trigger_time,
+                                            finish_time=finish_time or trigger_time,
+                                            status=cp_status,
+                                            checkpoint_size=checkpoint_size,
+                                            duration=duration
+                                        )
+                                        if result:
+                                            logger.info(f"✅ 已保存作业 {job_id} 的Checkpoint #{cp_id}")
+                        except Exception as e:
+                            error_msg = str(e)
+                            # 如果是404错误，说明作业已经不在Flink中了，更新状态
+                            if "404" in error_msg or "not found" in error_msg.lower():
+                                logger.warning(f"⚠️ 作业 {job_id} 在Flink中不存在，更新状态为FAILED")
+                                try:
+                                    update_job_state(job_id, "FAILED")
+                                except Exception as update_err:
+                                    logger.error(f"更新作业 {job_id} 状态失败: {update_err}")
+                            else:
+                                logger.error(f"❌ 同步作业 {job_id} 的Checkpoint失败: {e}")
+                    
+                    logger.info(f"✅ Checkpoint同步完成，处理了 {len(running_jobs)} 个运行中的作业")
+                    
+                except Exception as e:
+                    logger.error(f"❌ Checkpoint同步任务异常: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+                
+                # 固定每N秒同步一次（根据配置）
+                logger.info(f"⏰ 等待{sync_interval}秒后进行下一次同步...")
+                await asyncio.sleep(sync_interval)
+        
+        # 启动后台任务
+        checkpoint_sync_task = asyncio.create_task(sync_checkpoints())
+        logger.info("✅ Checkpoint同步后台任务已启动")
+        
     except Exception as e:
         logger.error(f"❌ 数据库初始化失败: {e}")
         raise
@@ -104,6 +321,14 @@ async def lifespan(app: FastAPI):
     yield
     
     # 关闭时清理资源
+    if checkpoint_sync_task:
+        checkpoint_sync_task.cancel()
+        try:
+            await checkpoint_sync_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("✅ Checkpoint同步后台任务已停止")
+    
     logger.info("正在关闭数据库连接...")
     db_manager.close()
     logger.info("数据库连接已关闭")
@@ -514,13 +739,123 @@ async def get_taskmanager_metrics(tm_id: str, metrics: Optional[str] = Query(Non
 
 
 # ============ 作业管理 ============
+@app.get("/api/jobs/runs", tags=["作业管理"])
+async def get_job_runs(limit: int = 100, offset: int = 0):
+    """获取所有作业运行记录（分页，不去重）"""
+    logger.info(f"=== 正在请求作业运行记录 (limit={limit}, offset={offset}) ===")
+    try:
+        # 从数据库获取所有作业记录
+        all_jobs = get_all_jobs(state=None, limit=limit)
+        
+        # 从 Flink 获取正在运行的作业列表
+        flink_job_map = {}
+        try:
+            jobs_overview = await flink_client.get_jobs_overview()
+            flink_jobs = jobs_overview.get("jobs", [])
+            flink_job_map = {job["id"]: job for job in flink_jobs}
+        except Exception as e:
+            logger.warning(f"获取 Flink 作业列表失败: {e}")
+        
+        # 同步Flink状态
+        for job in all_jobs:
+            job_id = job.get("job_id")
+            if job_id in flink_job_map:
+                flink_info = flink_job_map[job_id]
+                flink_status = flink_info.get("status")
+                if flink_status in ["RUNNING", "FINISHED", "FAILED", "CANCELED", "RESTARTING"]:
+                    job["state"] = flink_status
+                if not job.get("start_time") and flink_info.get("start-time"):
+                    job["start_time"] = flink_info.get("start-time")
+            else:
+                # 只有当数据库中状态为RUNNING时，才更新为FAILED并同步checkpoint
+                if job.get("state") == "RUNNING":
+                    job["state"] = "FAILED"
+                    try:
+                        update_job_state(job_id, "FAILED")
+                        # 作业失败时，从Flink获取失败的checkpoint信息
+                        logger.info(f"⚠️ 作业 {job_id} 已失败，正在获取失败的Checkpoint信息...")
+                        try:
+                            checkpoints_info = await flink_client.get_job_checkpoints(job_id)
+                            if checkpoints_info:
+                                # 从latest.failed获取失败的checkpoint
+                                latest_failed = checkpoints_info.get("latest", {}).get("failed")
+                                if latest_failed:
+                                    from db_operations import save_checkpoint
+                                    cp_id = latest_failed.get("id")
+                                    # 失败的checkpoint没有external_path，使用最后一次成功的路径
+                                    latest_completed = checkpoints_info.get("latest", {}).get("completed")
+                                    cp_path = latest_completed.get("external_path") if latest_completed else None
+                                    cp_status = latest_failed.get("status", "FAILED")
+                                    trigger_time = int(latest_failed.get("trigger_timestamp", 0))
+                                    finish_time = int(latest_failed.get("failure_timestamp", 0)) if "failure_timestamp" in latest_failed else None
+                                    checkpoint_size = int(latest_failed.get("checkpointed_size", 0)) if "checkpointed_size" in latest_failed else None
+                                    duration = int(latest_failed.get("end_to_end_duration", 0)) if "end_to_end_duration" in latest_failed else None
+                                    failure_message = latest_failed.get("failure_message", "")
+                                    if cp_path:
+                                        save_checkpoint(
+                                            job_id=job_id,
+                                            checkpoint_id=cp_id,
+                                            checkpoint_path=cp_path,
+                                            trigger_time=trigger_time,
+                                            finish_time=finish_time or trigger_time,
+                                            status=cp_status,
+                                            checkpoint_size=checkpoint_size,
+                                            duration=duration
+                                        )
+                                        logger.info(f"✅ 已同步失败作业 {job_id} 的Checkpoint: #{cp_id}, 失败原因: {failure_message}")
+                                    else:
+                                        logger.warning(f"⚠️ 作业 {job_id} 没有可用的Checkpoint路径，保留数据库已有记录")
+                                else:
+                                    logger.warning(f"⚠️ 作业 {job_id} 没有失败的Checkpoint记录，保留数据库已有记录")
+                            else:
+                                logger.warning(f"⚠️ 无法从Flink获取Checkpoint信息，保留数据库已有记录")
+                        except Exception as api_err:
+                            logger.warning(f"⚠️ 获取Flink Checkpoint失败: {api_err}，保留数据库已有记录")
+                    except Exception as e:
+                        logger.warning(f"更新作业 {job_id} 状态失败: {e}")
+        
+        # 动态更新运行时长
+        current_time_ms = int(time.time() * 1000)
+        for job in all_jobs:
+            if job.get("state") == "RUNNING" and job.get("start_time"):
+                try:
+                    start_time = int(job.get("start_time"))
+                    if start_time > 0:
+                        job["duration"] = current_time_ms - start_time
+                except (ValueError, TypeError):
+                    pass
+        
+        # 按创建时间倒序排序
+        sorted_jobs = sorted(
+            all_jobs,
+            key=lambda x: x.get("created_at") or "",
+            reverse=True
+        )
+        
+        # 分页
+        total = len(sorted_jobs)
+        paginated_jobs = sorted_jobs[offset:offset + limit]
+        
+        logger.info(f"返回 {len(paginated_jobs)} 条运行记录（总共 {total} 条）")
+        return {
+            "jobs": paginated_jobs,
+            "total": total,
+            "offset": offset,
+            "limit": limit
+        }
+    except Exception as e:
+        logger.error(f"Failed to get job runs: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/jobs/history", tags=["作业管理"])
 async def get_job_history(limit: int = 50):
-    """获取历史作业列表（包括已停止和正在运行的作业，按名称去重）"""
+    """获取历史作业列表（按作业名称去重，每个作业名称只保留最新记录）"""
     logger.info(f"=== 正在请求历史作业列表 (limit={limit}) ===")
     try:
         # 从数据库获取所有作业
-        # 注意：get_all_jobs 会返回所有记录，我们需要在这里做严格的去重逻辑
         all_jobs = get_all_jobs(state=None, limit=limit)
         
         # 从 Flink 获取正在运行的作业列表
@@ -535,74 +870,91 @@ async def get_job_history(limit: int = 50):
         except Exception as e:
             logger.warning(f"获取 Flink 作业列表失败: {e}")
         
-        # 获取所有正在运行作业的 resumed_from_job_id（这些历史作业已被成功重启）
-        restarted_job_ids = set()
+        # 同步状态
         for job in all_jobs:
             job_id = job.get("job_id")
-            
-            # 如果作业在 Flink 中存在，使用 Flink 的实时信息更新
             if job_id in flink_job_map:
                 flink_info = flink_job_map[job_id]
                 flink_status = flink_info.get("status")
-                
-                # 更新状态 - 使用Flink的实时状态
                 if flink_status in ["RUNNING", "FINISHED", "FAILED", "CANCELED", "RESTARTING"]:
                     job["state"] = flink_status
-                    # 如果状态变为失败或取消，同时更新数据库
-                    if flink_status in ["FAILED", "CANCELED", "FINISHED"]:
-                        try:
-                            update_job_state(job_id, flink_status)
-                            logger.info(f"作业 {job_id} 状态已同步: {flink_status}")
-                        except Exception as e:
-                            logger.warning(f"更新作业 {job_id} 状态失败: {e}")
-                
-                # 如果数据库中没有 start_time，尝试从 Flink 信息中获取
                 if not job.get("start_time") and flink_info.get("start-time"):
                     job["start_time"] = flink_info.get("start-time")
             else:
-                # 作业不在 Flink 中，但数据库状态是 RUNNING，说明作业已经失败或被清理
+                # 只有当数据库中状态为RUNNING时，才更新为FAILED并同步checkpoint
                 if job.get("state") == "RUNNING":
                     job["state"] = "FAILED"
                     try:
                         update_job_state(job_id, "FAILED")
-                        logger.info(f"作业 {job_id} 不在 Flink 中，状态已更新为 FAILED")
+                        # 作业失败时，从Flink获取失败的checkpoint信息
+                        logger.info(f"⚠️ 作业 {job_id} 已失败，正在获取失败的Checkpoint信息...")
+                        try:
+                            checkpoints_info = await flink_client.get_job_checkpoints(job_id)
+                            if checkpoints_info:
+                                # 从latest.failed获取失败的checkpoint
+                                latest_failed = checkpoints_info.get("latest", {}).get("failed")
+                                if latest_failed:
+                                    from db_operations import save_checkpoint
+                                    cp_id = latest_failed.get("id")
+                                    # 失败的checkpoint没有external_path，使用最后一次成功的路径
+                                    latest_completed = checkpoints_info.get("latest", {}).get("completed")
+                                    cp_path = latest_completed.get("external_path") if latest_completed else None
+                                    cp_status = latest_failed.get("status", "FAILED")
+                                    trigger_time = int(latest_failed.get("trigger_timestamp", 0))
+                                    finish_time = int(latest_failed.get("failure_timestamp", 0)) if "failure_timestamp" in latest_failed else None
+                                    checkpoint_size = int(latest_failed.get("checkpointed_size", 0)) if "checkpointed_size" in latest_failed else None
+                                    duration = int(latest_failed.get("end_to_end_duration", 0)) if "end_to_end_duration" in latest_failed else None
+                                    failure_message = latest_failed.get("failure_message", "")
+                                    if cp_path:
+                                        save_checkpoint(
+                                            job_id=job_id,
+                                            checkpoint_id=cp_id,
+                                            checkpoint_path=cp_path,
+                                            trigger_time=trigger_time,
+                                            finish_time=finish_time or trigger_time,
+                                            status=cp_status,
+                                            checkpoint_size=checkpoint_size,
+                                            duration=duration
+                                        )
+                                        logger.info(f"✅ 已同步失败作业 {job_id} 的Checkpoint: #{cp_id}, 失败原因: {failure_message}")
+                                    else:
+                                        logger.warning(f"⚠️ 作业 {job_id} 没有可用的Checkpoint路径，保留数据库已有记录")
+                                else:
+                                    logger.warning(f"⚠️ 作业 {job_id} 没有失败的Checkpoint记录，保留数据库已有记录")
+                            else:
+                                logger.warning(f"⚠️ 无法从Flink获取Checkpoint信息，保留数据库已有记录")
+                        except Exception as api_err:
+                            logger.warning(f"⚠️ 获取Flink Checkpoint失败: {api_err}，保留数据库已有记录")
                     except Exception as e:
                         logger.warning(f"更新作业 {job_id} 状态失败: {e}")
-            
-            resumed_from = job.get("resumed_from_job_id")
-            job_state = job.get("state")
-            # 如果这个作业正在运行，并且是从某个历史作业重启的
-            if resumed_from and (job_state == "RUNNING" or job_id in flink_running_jobs):
-                restarted_job_ids.add(resumed_from)
-                logger.debug(f"作业 {resumed_from} 已被成功重启为 {job_id}")
         
-        logger.info(f"已成功重启的历史作业数: {len(restarted_job_ids)}")
+        # 按作业名称去重，每个作业名称只保留最新记录
+        # 排序优先级：结束时间 > 开始时间
+        def get_job_sort_time(job):
+            end_time = job.get("end_time")
+            start_time = job.get("start_time")
+            # 统一转换为字符串进行比较
+            if end_time:
+                return str(end_time)
+            elif start_time:
+                return str(start_time)
+            return "0"
         
-        # 过滤逻辑：
-        # 1. 排除已被成功重启的旧作业（如果新的已经在运行）
-        # 2. 不再按名称去重，显示所有历史记录
-        
-        history_jobs = []
+        job_name_map = {}
+        for job in all_jobs:
+            job_name = job.get("job_name") or job.get("flink_job_name") or job.get("job_id")
+            if job_name not in job_name_map:
+                job_name_map[job_name] = job
+            else:
+                existing_job = job_name_map[job_name]
+                existing_time = get_job_sort_time(existing_job)
+                current_time = get_job_sort_time(job)
+                if current_time > existing_time:
+                    job_name_map[job_name] = job
 
-        # 先按创建时间倒序排序，确保先处理最新的
-        # 注意：created_at可能是None，需要处理
-        sorted_all_jobs = sorted(
-            all_jobs, 
-            key=lambda x: x.get("created_at") or "",
-            reverse=True
-        )
-
-        for job in sorted_all_jobs:
-            job_id = job.get("job_id")
-            
-            # 如果这个作业已经被成功重启，则不显示（因为它已经是历史了，有一个新的在运行）
-            if job_id in restarted_job_ids:
-                logger.debug(f"作业 {job_id} 已被成功重启，不显示在历史作业中")
-                continue
-            
-            history_jobs.append(job)
+        history_jobs = list(job_name_map.values())
         
-        # 动态更新 RUNNING 状态作业的运行时长
+        # 动态更新运行时长
         current_time_ms = int(time.time() * 1000)
         for job in history_jobs:
             if job.get("state") == "RUNNING" and job.get("start_time"):
@@ -612,20 +964,15 @@ async def get_job_history(limit: int = 50):
                         job["duration"] = current_time_ms - start_time
                 except (ValueError, TypeError):
                     pass
-
-        # 最终排序
-        try:
-            sorted_jobs = sorted(
-                history_jobs, 
-                key=lambda x: x.get("created_at") or "",
-                reverse=True
-            )
-        except Exception as sort_err:
-            logger.error(f"排序历史作业失败: {sort_err}")
-            # 降级：如果不排序直接返回
-            sorted_jobs = history_jobs
         
-        logger.info(f"返回 {len(sorted_jobs)} 个历史作业（从 {len(all_jobs)} 个作业中过滤）")
+        # 按结束时间倒序排序（没有结束时间则按开始时间）
+        sorted_jobs = sorted(
+            history_jobs,
+            key=lambda x: get_job_sort_time(x),
+            reverse=True
+        )
+        
+        logger.info(f"返回 {len(sorted_jobs)} 个历史作业（从 {len(all_jobs)} 个作业中按名称去重）")
         return sorted_jobs
     except Exception as e:
         logger.error(f"Failed to get history jobs: {e}")
@@ -649,6 +996,19 @@ async def delete_history_job(job_id: str):
         raise
     except Exception as e:
         logger.error(f"删除作业失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/jobs/history/{job_id}/checkpoints", tags=["作业管理"])
+async def get_job_checkpoints_api(job_id: str):
+    """获取作业的所有Checkpoint记录"""
+    try:
+        from db_operations import get_all_checkpoints
+        checkpoints = get_all_checkpoints(job_id=job_id, limit=100)
+        logger.info(f"✅ 获取作业 {job_id} 的 {len(checkpoints)} 条Checkpoint记录")
+        return {"checkpoints": checkpoints}
+    except Exception as e:
+        logger.error(f"获取Checkpoint列表失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -730,16 +1090,27 @@ async def restart_history_job(job_id: str, req: ResumeJobRequest):
         savepoint_path = req.savepoint_path
         savepoint_timestamp = req.timestamp
         
-        if not savepoint_path:
-            # 查询最新的Savepoint
-            latest_savepoint = get_latest_savepoint(job_id_to_restart)
-            if latest_savepoint:
-                savepoint_path = latest_savepoint.get("savepoint_path")
-                savepoint_timestamp = latest_savepoint.get("timestamp")
-                logger.info(f"Found latest savepoint: {savepoint_path}")
+        # 如果没有指定savepoint，尝试从checkpoint恢复
+        checkpoint_path_to_restore = req.checkpoint_path
+        
+        if not checkpoint_path_to_restore and not savepoint_path:
+            # 优先尝试从checkpoint恢复，如果没有则从savepoint恢复
+            from db_operations import get_latest_checkpoint
+            latest_checkpoint = get_latest_checkpoint(job_id_to_restart)
+            
+            if latest_checkpoint:
+                checkpoint_path_to_restore = latest_checkpoint.get("checkpoint_path")
+                logger.info(f"✅ 找到最新Checkpoint: {checkpoint_path_to_restore}")
+            else:
+                # 没有checkpoint，尝试从savepoint恢复
+                latest_savepoint = get_latest_savepoint(job_id_to_restart)
+                if latest_savepoint:
+                    savepoint_path = latest_savepoint.get("savepoint_path")
+                    savepoint_timestamp = latest_savepoint.get("timestamp")
+                    logger.info(f"✅ 找到最新Savepoint: {savepoint_path}")
         
         # 如果没有指定timestamp，尝试从db_job获取（如果路径匹配）
-        if not savepoint_timestamp:
+        if savepoint_path and not savepoint_timestamp:
             if db_job and savepoint_path == db_job.get("savepoint_path"):
                  savepoint_timestamp = db_job.get("savepoint_timestamp")
             
@@ -767,12 +1138,34 @@ async def restart_history_job(job_id: str, req: ResumeJobRequest):
             except:
                 savepoint_timestamp = None
 
+        # 从配置表获取checkpoint路径并构建作业专属子目录（用于新checkpoint）
+        from db_operations import get_flink_config
+        base_checkpoint_path = get_flink_config("checkpoint_path")
+        checkpoint_path = None
+        
+        if base_checkpoint_path:
+            # 为作业创建独立的子目录
+            import re
+            safe_job_name = job_name.replace('/', '_').replace('\\', '_').replace(':', '_')
+            checkpoint_path = base_checkpoint_path.rstrip('/') + '/' + safe_job_name
+            logger.info(f"✅ 从配置表获取到Checkpoint路径: {base_checkpoint_path}")
+            logger.info(f"✅ 为作业 '{job_name}' 创建子目录: {checkpoint_path}")
+        else:
+            logger.warning(f"⚠️ 未配置Checkpoint路径")
+        
+        # 如果指定了从checkpoint恢复，使用checkpoint路径作为savepoint路径
+        if checkpoint_path_to_restore:
+            logger.info(f"🔄 从Checkpoint恢复作业: {checkpoint_path_to_restore}")
+            savepoint_path = checkpoint_path_to_restore
+            savepoint_timestamp = None  # checkpoint不需要timestamp
+
         # 使用SQL Gateway重新提交作业
         result = await flink_client.submit_sql_job(
             sql=sql_text,
             job_name=job_name,
             parallelism=parallelism,
-            savepoint_path=savepoint_path
+            savepoint_path=savepoint_path,
+            checkpoint_path=checkpoint_path
         )
         
         logger.info(f"submit_sql_job returned: {result}")
@@ -1138,6 +1531,39 @@ async def cancel_job(job_id: str):
         # 更新数据库中的作业状态
         update_job_state(job_id, "CANCELED", end_time=end_time, duration=duration)
         
+        # 立即同步checkpoint状态到数据库
+        try:
+            logger.info(f"🔄 作业取消后同步Checkpoint状态: {job_id}")
+            checkpoints_info = await flink_client.get_job_checkpoints(job_id)
+            
+            if checkpoints_info and "history" in checkpoints_info:
+                history = checkpoints_info["history"]
+                if history and len(history) > 0:
+                    # 按id取最大的checkpoint（最新的）
+                    latest_checkpoint = max(history, key=lambda x: x.get("id", 0))
+                    cp_id = latest_checkpoint.get("id")
+                    cp_path = latest_checkpoint.get("path") or latest_checkpoint.get("external_path")
+                    cp_status = latest_checkpoint.get("status", "COMPLETED")
+                    trigger_time = int(latest_checkpoint.get("trigger_timestamp", 0))
+                    finish_time = int(latest_checkpoint.get("latest_ack_timestamp", trigger_time))
+                    checkpoint_size = int(latest_checkpoint.get("checkpointed_size", 0)) if "checkpointed_size" in latest_checkpoint else None
+                    cp_duration = int(latest_checkpoint.get("end_to_end_duration", 0)) if "end_to_end_duration" in latest_checkpoint else None
+                    
+                    if cp_path:
+                        save_checkpoint(
+                            job_id=job_id,
+                            checkpoint_id=cp_id,
+                            checkpoint_path=cp_path,
+                            trigger_time=trigger_time,
+                            finish_time=finish_time,
+                            status=cp_status,
+                            checkpoint_size=checkpoint_size,
+                            duration=cp_duration
+                        )
+                        logger.info(f"✅ 已保存取消作业的Checkpoint: #{cp_id}")
+        except Exception as e:
+            logger.warning(f"⚠️ 同步取消作业的Checkpoint失败: {e}")
+        
         # 记录操作日志
         log_operation(job_id=job_id, operation_type="CANCEL")
         
@@ -1154,10 +1580,49 @@ async def stop_job(job_id: str, req: SavepointRequest = SavepointRequest()):
         logger.info(f"=== 开始暂停作业: {job_id} ===")
         logger.info(f"请求参数: target_directory={req.target_directory}, withSavepoint={req.withSavepoint}")
         
+        # 如果用户没有指定savepoint目录，从配置表读取默认路径
+        target_directory = req.target_directory
+        if req.withSavepoint and not target_directory:
+            from db_operations import get_flink_config
+            
+            # 获取作业的用户定义名称
+            job_name_file = SQL_FILES_DIR / f"{job_id}_name.txt"
+            job_name = None
+            logger.info(f"🔍 尝试读取作业名称文件: {job_name_file}")
+            logger.info(f"🔍 文件是否存在: {job_name_file.exists()}")
+            
+            if job_name_file.exists():
+                job_name = job_name_file.read_text(encoding='utf-8').strip()
+                logger.info(f"✅ 从文件读取到作业名称: '{job_name}'")
+            else:
+                logger.warning(f"⚠️ 作业名称文件不存在: {job_name_file}")
+                # 尝试从数据库获取作业名称
+                db_job = get_job(job_id)
+                if db_job:
+                    job_name = db_job.get("job_name")
+                    logger.info(f"✅ 从数据库获取到作业名称: '{job_name}'")
+            
+            base_savepoint_path = get_flink_config("savepoint_path")
+            if base_savepoint_path:
+                # 为每个作业创建独立的子目录（按作业名）
+                # 直接使用中文作业名，不需要URL编码
+                # 只替换路径分隔符和特殊字符
+                if job_name:
+                    safe_job_name = job_name.replace('/', '_').replace('\\', '_').replace(':', '_')
+                    target_directory = base_savepoint_path.rstrip('/') + '/' + safe_job_name
+                    logger.info(f"✅ 从配置表获取到Savepoint路径: {base_savepoint_path}")
+                    logger.info(f"✅ 为作业 '{job_name}' 创建子目录: {target_directory}")
+                else:
+                    target_directory = base_savepoint_path
+                    logger.info(f"✅ 从配置表获取到Savepoint路径: {base_savepoint_path}")
+                    logger.warning(f"⚠️ 未找到作业名称，使用基础路径")
+            else:
+                logger.warning(f"⚠️ 配置表中未配置Savepoint路径，将使用Flink默认路径")
+        
         try:
-            if req.target_directory or req.withSavepoint:
-                logger.info(f"调用stop_job_with_savepoint，目录: {req.target_directory}")
-                result = await flink_client.stop_job_with_savepoint(job_id, req.target_directory)
+            if req.withSavepoint:
+                logger.info(f"调用stop_job_with_savepoint，目录: {target_directory}")
+                result = await flink_client.stop_job_with_savepoint(job_id, target_directory)
                 
                 logger.info(f"Flink API返回: {result}")
                 
@@ -1489,6 +1954,21 @@ async def restart_job(job_id: str, req: ResumeJobRequest):
         logger.info(f"🔄 开始恢复作业: {original_job_name}")
         logger.info(f"📍 Savepoint路径: {savepoint_path}")
         
+        # 从配置表获取checkpoint路径并构建作业专属子目录
+        from db_operations import get_flink_config
+        base_checkpoint_path = get_flink_config("checkpoint_path")
+        checkpoint_path = None
+        
+        if base_checkpoint_path:
+            # 为作业创建独立的子目录
+            import re
+            safe_job_name = original_job_name.replace('/', '_').replace('\\', '_').replace(':', '_')
+            checkpoint_path = base_checkpoint_path.rstrip('/') + '/' + safe_job_name
+            logger.info(f"✅ 从配置表获取到Checkpoint路径: {base_checkpoint_path}")
+            logger.info(f"✅ 为作业 '{original_job_name}' 创建子目录: {checkpoint_path}")
+        else:
+            logger.warning(f"⚠️ 未配置Checkpoint路径")
+        
         # 检查SQL是否包含INSERT语句
         if not sql_text or 'INSERT' not in sql_text.upper():
             logger.error(f"❌ SQL为空或没有INSERT语句，无法恢复作业")
@@ -1504,13 +1984,14 @@ async def restart_job(job_id: str, req: ResumeJobRequest):
         logger.info(f"SQL内容前200字符: {sql_text[:200]}")
         logger.info(f"是否包含INSERT: {'INSERT' in sql_text.upper()}")
         
-        # 使用SQL Gateway重新提交作业，指定savepoint路径和原始作业名称
+        # 使用SQL Gateway重新提交作业，指定savepoint路径、checkpoint路径和原始作业名称
         logger.info(f"Calling submit_sql_job...")
         result = await flink_client.submit_sql_job(
             sql=sql_text,
             job_name=original_job_name,
             parallelism=parallelism,
-            savepoint_path=savepoint_path
+            savepoint_path=savepoint_path,
+            checkpoint_path=checkpoint_path
         )
         
         logger.info(f"submit_sql_job returned: {result}")
@@ -1790,6 +2271,26 @@ async def submit_sql_job(req: SqlJobSubmitRequest):
     logger.info(f"SQL 内容（前 200 字符）: {req.sql_text[:200]}")
     logger.info(f"SQL 长度: {len(req.sql_text)}")
 
+    # 从配置表获取checkpoint路径
+    from db_operations import get_flink_config
+    base_checkpoint_path = get_flink_config("checkpoint_path")
+    
+    # 为每个作业创建独立的子目录（按作业名）
+    # 直接使用中文作业名，不需要URL编码
+    # 只替换路径分隔符和特殊字符
+    import re
+    safe_job_name = req.job_name.replace('/', '_').replace('\\', '_').replace(':', '_')
+    
+    checkpoint_path = None
+    
+    if base_checkpoint_path:
+        checkpoint_path = base_checkpoint_path.rstrip('/') + '/' + safe_job_name
+        logger.info(f"✅ 从配置表获取到Checkpoint路径: {base_checkpoint_path}")
+        logger.info(f"✅ 为作业 '{req.job_name}' 创建子目录: {checkpoint_path}")
+    
+    if not checkpoint_path:
+        logger.warning(f"⚠️ 未配置Checkpoint路径")
+
     # 1. 尝试使用 SQL Gateway 提交
     try:
         logger.info(f"尝试使用 SQL Gateway 提交作业")
@@ -1798,7 +2299,9 @@ async def submit_sql_job(req: SqlJobSubmitRequest):
         result = await flink_client.submit_sql_job(
             sql=req.sql_text,
             job_name=req.job_name,
-            parallelism=req.parallelism
+            parallelism=req.parallelism,
+            checkpoint_path=checkpoint_path  # 只传递checkpoint_path
+            # 注意：新建作业时不传递savepoint_path，savepoint_path只用于从savepoint恢复
         )
 
         logger.info(f"SQL Gateway 返回结果: {result}")
@@ -2181,7 +2684,8 @@ async def test_datasource(request: DataSourceBase):
             port=request.port,
             username=request.username,
             password=request.password,
-            database=request.database
+            database=request.database,
+            properties=request.properties
         )
         if success:
             return {"status": "success", "message": message}
@@ -2210,6 +2714,540 @@ async def get_datasource_columns_api(id: int, table_name: str):
         return {"columns": columns}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/datasources/{id}/topics", tags=["数据源管理"])
+async def get_kafka_topics_api(id: int):
+    """获取Kafka数据源的Topic列表"""
+    try:
+        from db_operations import get_datasource_by_id
+        ds = get_datasource_by_id(id)
+        if not ds:
+            raise HTTPException(status_code=404, detail="数据源不存在")
+        if ds['type'] != 'kafka':
+            raise HTTPException(status_code=400, detail="该数据源不是Kafka类型")
+        
+        bootstrap_servers = ds['host']
+        if ds['port']:
+            bootstrap_servers = f"{ds['host']}:{ds['port']}"
+        
+        import socket
+        from kafka import KafkaAdminClient
+        
+        sasl_mechanism = ds.get('properties', {}).get('sasl_mechanism')
+        username = ds.get('username')
+        password = ds.get('password')
+        
+        config = {
+            'bootstrap_servers': bootstrap_servers,
+            'request_timeout_ms': 10000
+        }
+        
+        if sasl_mechanism and username and password:
+            config['sasl_mechanism'] = sasl_mechanism
+            config['security_protocol'] = 'SASL_PLAINTEXT'
+            config['sasl_plain_username'] = username
+            config['sasl_plain_password'] = password
+        
+        admin_client = KafkaAdminClient(**config)
+        topics = admin_client.list_topics()
+        admin_client.close()
+        
+        consumer_topics = [t for t in topics if not t.startswith('__')]
+        
+        return {"topics": consumer_topics}
+    except ImportError:
+        raise HTTPException(status_code=500, detail="未安装kafka-python库，请执行: pip install kafka-python")
+    except Exception as e:
+        logger.error(f"获取Kafka Topic列表失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取Topic列表失败: {str(e)}")
+
+
+@app.get("/api/datasources/{id}/topics/{topic}/schema", tags=["数据源管理"])
+async def get_kafka_topic_schema(id: int, topic: str):
+    """从Kafka Topic消费样本消息推断字段结构"""
+    try:
+        from db_operations import get_datasource_by_id
+        ds = get_datasource_by_id(id)
+        if not ds:
+            raise HTTPException(status_code=404, detail="数据源不存在")
+        if ds['type'] != 'kafka':
+            raise HTTPException(status_code=400, detail="该数据源不是Kafka类型")
+        
+        bootstrap_servers = ds['host']
+        if ds['port']:
+            bootstrap_servers = f"{ds['host']}:{ds['port']}"
+        
+        from kafka import KafkaConsumer
+        import json
+        import uuid
+        
+        sasl_mechanism = ds.get('properties', {}).get('sasl_mechanism')
+        username = ds.get('username')
+        password = ds.get('password')
+        
+        config = {
+            'bootstrap_servers': bootstrap_servers,
+            'auto_offset_reset': 'earliest',
+            'consumer_timeout_ms': 5000,
+            'max_poll_records': 1,
+            'fetch_max_bytes': 1024 * 1024,
+            'group_id': f'flink-manager-schema-{uuid.uuid4()}'
+        }
+        
+        if sasl_mechanism and username and password:
+            config['sasl_mechanism'] = sasl_mechanism
+            config['security_protocol'] = 'SASL_PLAINTEXT'
+            config['sasl_plain_username'] = username
+            config['sasl_plain_password'] = password
+        
+        consumer = KafkaConsumer(topic, **config)
+        
+        messages = []
+        poll_result = consumer.poll(timeout_ms=5000, max_records=1)
+        consumer.close()
+        
+        for tp, msgs in poll_result.items():
+            for msg in msgs:
+                messages.append(msg)
+                if len(messages) >= 1:
+                    break
+            if len(messages) >= 1:
+                break
+        
+        if not messages:
+            return {"columns": [], "message": "未消费到消息，请手动配置字段"}
+        
+        columns = []
+        for msg in messages:
+            try:
+                value = msg.value.decode('utf-8') if msg.value else '{}'
+                data = json.loads(value)
+                if isinstance(data, dict):
+                    for key, val in data.items():
+                        existing = next((c for c in columns if c['name'] == key), None)
+                        if not existing:
+                            col_type = infer_flink_type(val)
+                            columns.append({
+                                'name': key,
+                                'type': col_type,
+                                'primaryKey': False
+                            })
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                continue
+        
+        if not columns:
+            return {"columns": [], "message": "无法解析消息格式，请手动配置字段"}
+        
+        return {"columns": columns, "message": f"已从{len(messages)}条消息推断字段结构"}
+    except ImportError:
+        raise HTTPException(status_code=500, detail="未安装kafka-python库，请执行: pip install kafka-python")
+    except Exception as e:
+        logger.error(f"获取Kafka Topic Schema失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取Schema失败: {str(e)}")
+
+
+def infer_flink_type(value):
+    """根据Python值推断Flink SQL类型"""
+    if value is None:
+        return 'STRING'
+    if isinstance(value, bool):
+        return 'BOOLEAN'
+    if isinstance(value, int):
+        if -2147483648 <= value <= 2147483647:
+            return 'INT'
+        return 'BIGINT'
+    if isinstance(value, float):
+        return 'DOUBLE'
+    if isinstance(value, str):
+        return 'STRING'
+    if isinstance(value, list):
+        return 'ARRAY'
+    if isinstance(value, dict):
+        return 'MAP'
+    return 'STRING'
+
+
+# ============ Flink配置管理 ============
+
+class FlinkConfigRequest(BaseModel):
+    """Flink配置请求模型"""
+    config_key: str = Field(..., description="配置键")
+    config_value: str = Field(..., description="配置值")
+    description: Optional[str] = Field(None, description="配置描述")
+
+class FlinkConfigResponse(BaseModel):
+    """Flink配置响应模型"""
+    id: int
+    config_key: str
+    config_value: str
+    description: Optional[str]
+    created_at: Optional[str]
+    updated_at: Optional[str]
+
+
+@app.get("/api/flink-config", tags=["Flink配置管理"], response_model=List[FlinkConfigResponse])
+async def list_flink_configs():
+    """获取所有Flink配置"""
+    try:
+        from db_operations import get_all_flink_configs
+        return get_all_flink_configs()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/flink-config/{config_key}", tags=["Flink配置管理"])
+async def get_flink_config_api(config_key: str):
+    """获取指定Flink配置"""
+    try:
+        from db_operations import get_flink_config
+        config_value = get_flink_config(config_key)
+        if config_value is None:
+            raise HTTPException(status_code=404, detail=f"配置 {config_key} 不存在")
+        return {"config_key": config_key, "config_value": config_value}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/flink-config", tags=["Flink配置管理"])
+async def save_flink_config_api(request: FlinkConfigRequest):
+    """保存或更新Flink配置"""
+    try:
+        from db_operations import save_flink_config
+        success = save_flink_config(
+            config_key=request.config_key,
+            config_value=request.config_value,
+            description=request.description
+        )
+        if success:
+            return {"message": "配置保存成功"}
+        else:
+            raise HTTPException(status_code=500, detail="配置保存失败")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/flink-config/{config_key}", tags=["Flink配置管理"])
+async def delete_flink_config_api(config_key: str):
+    """删除Flink配置"""
+    try:
+        from db_operations import delete_flink_config
+        success = delete_flink_config(config_key)
+        if success:
+            return {"message": "配置删除成功"}
+        else:
+            raise HTTPException(status_code=404, detail=f"配置 {config_key} 不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ Kafka作业管理 ============
+from db_operations import (
+    add_kafka_job, update_kafka_job, delete_kafka_job, 
+    get_kafka_job, get_all_kafka_jobs, update_kafka_job_state,
+    get_datasource_by_id
+)
+
+class KafkaJobCreateRequest(BaseModel):
+    job_name: str
+    source_datasource_id: int
+    source_topics: str
+    source_group_id: Optional[str] = None
+    source_start_mode: Optional[str] = 'latest'
+    source_timestamp: Optional[int] = None
+    source_format: Optional[str] = 'json'
+    source_schema: Optional[List[dict]] = None
+    target_datasource_id: int
+    target_table: str
+    target_database: Optional[str] = None
+    auto_create_table: Optional[bool] = True
+    table_primary_keys: Optional[str] = None
+    field_mappings: Optional[List[dict]] = None
+    parallelism: Optional[int] = 1
+    checkpoint_interval: Optional[int] = 60000
+
+class KafkaJobUpdateRequest(BaseModel):
+    job_name: Optional[str] = None
+    source_topics: Optional[str] = None
+    source_group_id: Optional[str] = None
+    source_start_mode: Optional[str] = None
+    source_timestamp: Optional[int] = None
+    source_format: Optional[str] = None
+    source_schema: Optional[List[dict]] = None
+    target_table: Optional[str] = None
+    target_database: Optional[str] = None
+    auto_create_table: Optional[bool] = None
+    table_primary_keys: Optional[str] = None
+    field_mappings: Optional[List[dict]] = None
+    parallelism: Optional[int] = None
+    checkpoint_interval: Optional[int] = None
+
+@app.get("/api/kafka-jobs", tags=["Kafka作业管理"])
+async def list_kafka_jobs(state: Optional[str] = None):
+    """获取所有Kafka同步作业"""
+    try:
+        jobs = get_all_kafka_jobs(state=state)
+        for job in jobs:
+            source_ds = get_datasource_by_id(job['source_datasource_id'])
+            target_ds = get_datasource_by_id(job['target_datasource_id'])
+            job['source_datasource_name'] = source_ds['name'] if source_ds else '未知'
+            job['target_datasource_name'] = target_ds['name'] if target_ds else '未知'
+        return jobs
+    except Exception as e:
+        logger.error(f"获取Kafka作业列表失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/kafka-jobs/{id}", tags=["Kafka作业管理"])
+async def get_kafka_job_detail(id: int):
+    """获取Kafka作业详情"""
+    try:
+        job = get_kafka_job(id)
+        if not job:
+            raise HTTPException(status_code=404, detail="作业不存在")
+        
+        source_ds = get_datasource_by_id(job['source_datasource_id'])
+        target_ds = get_datasource_by_id(job['target_datasource_id'])
+        job['source_datasource'] = source_ds
+        job['target_datasource'] = target_ds
+        return job
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取Kafka作业详情失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/kafka-jobs", tags=["Kafka作业管理"])
+async def create_kafka_job(request: KafkaJobCreateRequest):
+    """创建Kafka同步作业"""
+    try:
+        result = add_kafka_job(
+            job_name=request.job_name,
+            source_datasource_id=request.source_datasource_id,
+            source_topics=request.source_topics,
+            source_group_id=request.source_group_id,
+            source_start_mode=request.source_start_mode,
+            source_timestamp=request.source_timestamp,
+            source_format=request.source_format,
+            source_schema=request.source_schema,
+            target_datasource_id=request.target_datasource_id,
+            target_table=request.target_table,
+            target_database=request.target_database,
+            auto_create_table=request.auto_create_table,
+            table_primary_keys=request.table_primary_keys,
+            field_mappings=request.field_mappings,
+            parallelism=request.parallelism,
+            checkpoint_interval=request.checkpoint_interval
+        )
+        return {"status": "success", "message": "Kafka作业已创建", "data": result}
+    except Exception as e:
+        logger.error(f"创建Kafka作业失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/kafka-jobs/{id}", tags=["Kafka作业管理"])
+async def update_kafka_job_endpoint(id: int, request: KafkaJobUpdateRequest):
+    """更新Kafka作业配置"""
+    try:
+        update_data = {k: v for k, v in request.dict().items() if v is not None}
+        success = update_kafka_job(id, **update_data)
+        if success:
+            return {"status": "success", "message": "Kafka作业已更新"}
+        else:
+            raise HTTPException(status_code=404, detail="作业不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"更新Kafka作业失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/kafka-jobs/{id}", tags=["Kafka作业管理"])
+async def delete_kafka_job_endpoint(id: int):
+    """删除Kafka作业"""
+    try:
+        success = delete_kafka_job(id)
+        if success:
+            return {"status": "success", "message": "Kafka作业已删除"}
+        else:
+            raise HTTPException(status_code=404, detail="作业不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"删除Kafka作业失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/kafka-jobs/{id}/start", tags=["Kafka作业管理"])
+async def start_kafka_job(id: int):
+    """启动Kafka同步作业"""
+    try:
+        job = get_kafka_job(id)
+        if not job:
+            raise HTTPException(status_code=404, detail="作业不存在")
+        
+        source_ds = get_datasource_by_id(job['source_datasource_id'])
+        target_ds = get_datasource_by_id(job['target_datasource_id'])
+        
+        if not source_ds or source_ds['type'] != 'kafka':
+            raise HTTPException(status_code=400, detail="源数据源必须是Kafka类型")
+        if not target_ds:
+            raise HTTPException(status_code=400, detail="目标数据源不存在")
+        
+        flink_sql = generate_kafka_to_db_sql(job, source_ds, target_ds)
+        
+        job_id = str(uuid.uuid4()).replace('-', '')[:32]
+        
+        result = await flink_client.submit_sql_job(
+            sql_text=flink_sql,
+            job_name=job['job_name'],
+            parallelism=job['parallelism'],
+            checkpoint_interval=job['checkpoint_interval']
+        )
+        
+        if result.get('job_id'):
+            update_kafka_job_state(id, 'RUNNING', flink_job_id=result['job_id'])
+            return {"status": "success", "message": "作业已启动", "flink_job_id": result['job_id']}
+        else:
+            update_kafka_job_state(id, 'FAILED', last_error=result.get('error', '启动失败'))
+            raise HTTPException(status_code=500, detail=result.get('error', '启动失败'))
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"启动Kafka作业失败: {e}")
+        update_kafka_job_state(id, 'FAILED', last_error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/kafka-jobs/{id}/stop", tags=["Kafka作业管理"])
+async def stop_kafka_job(id: int):
+    """停止Kafka同步作业"""
+    try:
+        job = get_kafka_job(id)
+        if not job:
+            raise HTTPException(status_code=404, detail="作业不存在")
+        
+        if not job['flink_job_id']:
+            raise HTTPException(status_code=400, detail="作业未运行")
+        
+        await flink_client.cancel_job(job['flink_job_id'])
+        update_kafka_job_state(id, 'STOPPED')
+        return {"status": "success", "message": "作业已停止"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"停止Kafka作业失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+def generate_kafka_to_db_sql(job: dict, source_ds: dict, target_ds: dict) -> str:
+    """生成Kafka到数据库的Flink SQL"""
+    
+    bootstrap_servers = source_ds['host']
+    if source_ds['port'] and ':' not in source_ds['host']:
+        bootstrap_servers = f"{source_ds['host']}:{source_ds['port']}"
+    
+    topics = job['source_topics']
+    group_id = job['source_group_id'] or f"flink_{job['job_name']}"
+    start_mode = job['source_start_mode']
+    source_format = job['source_format']
+    schema = job['source_schema'] or []
+    
+    target_table = job['target_table']
+    target_database = job['target_database'] or target_ds.get('database', '')
+    field_mappings = job['field_mappings'] or []
+    
+    sql_parts = []
+    
+    kafka_table = f"kafka_source_{job['id']}"
+    
+    if schema:
+        columns_def = ', '.join([f"`{col['name']}` {col['type']}" for col in schema])
+        sql_parts.append(f"""
+CREATE TABLE {kafka_table} (
+    {columns_def}
+) WITH (
+    'connector' = 'kafka',
+    'topic' = '{topics}',
+    'properties.bootstrap.servers' = '{bootstrap_servers}',
+    'properties.group.id' = '{group_id}',
+    'scan.startup.mode' = '{start_mode}',
+    'format' = '{source_format}'
+);""")
+    else:
+        sql_parts.append(f"""
+CREATE TABLE {kafka_table} (
+    data STRING
+) WITH (
+    'connector' = 'kafka',
+    'topic' = '{topics}',
+    'properties.bootstrap.servers' = '{bootstrap_servers}',
+    'properties.group.id' = '{group_id}',
+    'scan.startup.mode' = '{start_mode}',
+    'format' = '{source_format}'
+);""")
+    
+    target_type = target_ds['type']
+    target_table_name = f"target_table_{job['id']}"
+    
+    if target_type == 'mysql':
+        jdbc_url = f"jdbc:mysql://{target_ds['host']}:{target_ds['port']}/{target_database}"
+        connector = 'jdbc'
+        driver = 'com.mysql.cj.jdbc.Driver'
+    elif target_type == 'postgresql':
+        jdbc_url = f"jdbc:postgresql://{target_ds['host']}:{target_ds['port']}/{target_database}"
+        connector = 'jdbc'
+        driver = 'org.postgresql.Driver'
+    elif target_type == 'doris':
+        jdbc_url = f"jdbc:mysql://{target_ds['host']}:{target_ds['port']}/{target_database}"
+        connector = 'doris'
+        driver = 'com.mysql.cj.jdbc.Driver'
+    elif target_type == 'starrocks':
+        jdbc_url = f"jdbc:mysql://{target_ds['host']}:{target_ds['port']}/{target_database}"
+        connector = 'starrocks'
+        driver = 'com.mysql.cj.jdbc.Driver'
+    else:
+        jdbc_url = f"jdbc:{target_type}://{target_ds['host']}:{target_ds['port']}/{target_database}"
+        connector = 'jdbc'
+        driver = ''
+    
+    if schema:
+        columns_def = ', '.join([f"`{col['name']}` {col['type']}" for col in schema])
+        sql_parts.append(f"""
+CREATE TABLE {target_table_name} (
+    {columns_def}
+) WITH (
+    'connector' = '{connector}',
+    'url' = '{jdbc_url}',
+    'table-name' = '{target_table}',
+    'username' = '{target_ds['username']}',
+    'password' = '{target_ds['password']}'
+);""")
+        
+        if field_mappings:
+            select_cols = ', '.join([f"`{m['source']}` AS `{m['target']}`" for m in field_mappings])
+        else:
+            select_cols = ', '.join([f"`{col['name']}`" for col in schema])
+        
+        sql_parts.append(f"""
+INSERT INTO {target_table_name}
+SELECT {select_cols} FROM {kafka_table};""")
+    else:
+        sql_parts.append(f"""
+CREATE TABLE {target_table_name} (
+    data STRING
+) WITH (
+    'connector' = '{connector}',
+    'url' = '{jdbc_url}',
+    'table-name' = '{target_table}',
+    'username' = '{target_ds['username']}',
+    'password' = '{target_ds['password']}'
+);
+
+INSERT INTO {target_table_name}
+SELECT data FROM {kafka_table};""")
+    
+    return '\n'.join(sql_parts)
 
 
 # ============ 静态文件服务（前端页面）============

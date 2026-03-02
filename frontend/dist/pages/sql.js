@@ -28,6 +28,7 @@ export default {
         const createTableSqlVisible = ref(false);
         const currentCreateTableSql = ref('');
         const currentEditingTable = ref(null);
+        const flinkConfig = ref({ checkpoint_path: '', savepoint_path: '' });
 
         const sourceConnectorGroups = ref([
             {
@@ -149,8 +150,11 @@ export default {
             oceanbaseTenant: 'sys',
             kafkaBootstrapServers: 'localhost:9092',
             kafkaGroup: 'flink-consumer',
-            kafkaStartMode: 'latest',
-            kafkaFormat: 'json'
+            kafkaStartMode: 'latest-offset',
+            kafkaStartTimestamp: '',
+            kafkaStartTimestampDate: null,
+            kafkaSpecificOffsets: '',
+            kafkaFormat: 'json',
         });
 
         const queryTypes = ref([
@@ -193,7 +197,7 @@ export default {
                 kafkaTopic: '',
                 kafkaBootstrapServers: 'localhost:9092',
                 kafkaGroup: 'flink-consumer',
-                kafkaStartMode: 'latest',
+                kafkaStartMode: 'latest-offset',
                 mysqlStartMode: 'initial',
                 jdbcHost: 'localhost',
                 jdbcPort: 3306,
@@ -345,13 +349,22 @@ export default {
         }
 
         function addSinkTable() {
+            let fields = [];
+            let sourceTableName = '';
+            
+            if (sourceTables.value.length > 0) {
+                const sourceTable = sourceTables.value[0];
+                fields = JSON.parse(JSON.stringify(sourceTable.fields || []));
+                sourceTableName = sourceTable.tableName;
+            }
+            
             sinkTables.value.push({
-                tableName: '',
-                physicalTableName: '',
+                tableName: sourceTableName ? sourceTableName + '_sink' : '',
+                physicalTableName: sourceTableName ? sourceTableName + '_sink' : '',
                 autoCreateTable: true,
                 connectorType: sinkCommonConfig.value.connectorType,
                 format: 'json',
-                fields: [],
+                fields: fields,
                 datasourceId: sinkCommonConfig.value.datasourceId,
                 kafkaTopic: '',
                 kafkaBootstrapServers: sinkCommonConfig.value.kafkaBootstrapServers,
@@ -390,8 +403,36 @@ export default {
                 maxRetries: 3,
                 retryInterval: 10000,
                 writeMode: 'stream_load',
-                filePath: ''
+                filePath: '',
+                sourceTableName: sourceTableName
             });
+            
+            if (fields.length > 0) {
+                ElMessage.success('已从源表复制 ' + fields.length + ' 个字段');
+            }
+        }
+
+        function syncFieldsFromSource(table) {
+            if (sourceTables.value.length === 0) {
+                ElMessage.warning('请先配置源表');
+                return;
+            }
+            
+            let sourceTable = null;
+            if (table.sourceTableName) {
+                sourceTable = sourceTables.value.find(t => t.tableName === table.sourceTableName);
+            }
+            if (!sourceTable) {
+                sourceTable = sourceTables.value[0];
+            }
+            
+            if (sourceTable && sourceTable.fields && sourceTable.fields.length > 0) {
+                table.fields = JSON.parse(JSON.stringify(sourceTable.fields));
+                table.sourceTableName = sourceTable.tableName;
+                ElMessage.success('已从源表 ' + sourceTable.tableName + ' 同步 ' + table.fields.length + ' 个字段');
+            } else {
+                ElMessage.warning('源表没有字段信息');
+            }
         }
 
         function removeSinkTable(index) {
@@ -687,6 +728,8 @@ export default {
 
         function handleCommonConnectorChange() {
             autoFillDriverCommon();
+            // 自动应用配置到所有表
+            applyCommonConfigToAllSinks();
         }
 
         async function applyCommonDatasource(dsId) {
@@ -759,13 +802,19 @@ export default {
                 'oracle-cdc': 'oracle',
                 'tidb-cdc': 'tidb',
                 'oceanbase-cdc': 'oceanbase',
-                'jdbc': ['mysql', 'postgresql', 'oracle', 'sqlserver']
+                'jdbc': ['mysql', 'postgresql', 'oracle', 'sqlserver'],
+                'kafka': 'kafka',
+                'doris': 'doris',
+                'starrocks': 'starrocks'
             };
             const targetType = typeMap[connectorType];
             if (Array.isArray(targetType)) {
                 return datasources.value.filter(ds => targetType.includes(ds.type));
             }
-            return datasources.value.filter(ds => ds.type === targetType);
+            if (targetType) {
+                return datasources.value.filter(ds => ds.type === targetType);
+            }
+            return [];
         }
 
         function handleSourceCommonConnectorChange() {
@@ -776,7 +825,8 @@ export default {
                 'sqlserver-cdc': 1433,
                 'oracle-cdc': 1521,
                 'tidb-cdc': 4000,
-                'oceanbase-cdc': 2881
+                'oceanbase-cdc': 2881,
+                'kafka': 9092
             };
             sourceCommonConfig.value.port = portMap[connectorType] || 3306;
         }
@@ -796,10 +846,22 @@ export default {
             const ds = datasources.value.find(d => d.id === dsId);
             if (!ds) return;
             
-            sourceCommonConfig.value.host = ds.host + ':' + ds.port;
-            sourceCommonConfig.value.database = ds.database;
-            sourceCommonConfig.value.username = ds.username;
-            sourceCommonConfig.value.password = ds.password;
+            if (ds.type === 'kafka') {
+                if (ds.port) {
+                    sourceCommonConfig.value.kafkaBootstrapServers = ds.host + ':' + ds.port;
+                } else {
+                    sourceCommonConfig.value.kafkaBootstrapServers = ds.host;
+                }
+                sourceCommonConfig.value.host = sourceCommonConfig.value.kafkaBootstrapServers;
+                if (ds.properties && ds.properties.group_id) {
+                    sourceCommonConfig.value.kafkaGroup = ds.properties.group_id;
+                }
+            } else {
+                sourceCommonConfig.value.host = ds.host + ':' + ds.port;
+                sourceCommonConfig.value.database = ds.database;
+                sourceCommonConfig.value.username = ds.username;
+                sourceCommonConfig.value.password = ds.password;
+            }
         }
 
         function applyCommonConfigToAllSources() {
@@ -847,6 +909,13 @@ export default {
                     table.oceanbasePassword = config.password;
                     table.oceanbaseTenant = config.oceanbaseTenant;
                     table.cdcIncrementalSnapshot = config.incrementalSnapshot;
+                } else if (config.connectorType === 'kafka') {
+                    table.kafkaBootstrapServers = config.kafkaBootstrapServers;
+                    table.kafkaGroup = config.kafkaGroup;
+                    table.kafkaStartMode = config.kafkaStartMode;
+                    table.kafkaStartTimestamp = config.kafkaStartTimestamp;
+                    table.kafkaSpecificOffsets = config.kafkaSpecificOffsets;
+                    table.format = config.kafkaFormat;
                 }
             });
             ElMessage.success('已将公共配置应用到所有源表');
@@ -855,6 +924,11 @@ export default {
         async function refreshSourceTableFields(table) {
             const config = sourceCommonConfig.value;
             const connectorType = config.connectorType;
+            
+            if (connectorType === 'kafka') {
+                ElMessage.info('Kafka数据源需要手动配置字段结构');
+                return;
+            }
             
             let connectionInfo = {};
             let tableName = table.physicalTableName || table.tableName;
@@ -979,6 +1053,60 @@ export default {
             } catch (error) {
                 console.error('获取表结构失败:', error);
                 ElMessage.error('获取表结构失败: ' + error.message);
+            }
+        }
+
+        async function openSinkTableSelection(table) {
+            currentTable.value = table;
+            currentTableType.value = 'sink';
+            tableSelectionVisible.value = true;
+            loadingTables.value = true;
+            selectedTables.value = [];
+            
+            const config = sinkCommonConfig.value;
+            const connectorType = config.connectorType;
+            
+            table.connectorType = connectorType;
+            
+            try {
+                let tables = [];
+                
+                if (connectorType === 'kafka') {
+                    if (!config.datasourceId) {
+                        ElMessage.warning('请先选择Kafka数据源');
+                        loadingTables.value = false;
+                        return;
+                    }
+                    const response = await fetch('/api/datasources/' + config.datasourceId + '/topics');
+                    const data = await response.json();
+                    if (data.topics) {
+                        tables = data.topics;
+                    }
+                    tableList.value = tables.map(t => ({ table_name: t, table_type: 'TOPIC' }));
+                    if (tableList.value.length === 0) {
+                        ElMessage.info('该Kafka没有Topic');
+                    } else {
+                        ElMessage.success('获取Topic列表成功');
+                    }
+                } else if (config.datasourceId) {
+                    const response = await fetch('/api/datasources/' + config.datasourceId + '/tables');
+                    const data = await response.json();
+                    tables = data.tables || [];
+                    tableList.value = tables.map(t => ({ table_name: t, table_type: 'TABLE' }));
+                    if (tableList.value.length === 0) {
+                        ElMessage.info('该数据库没有表');
+                    } else {
+                        ElMessage.success('获取表列表成功');
+                    }
+                } else {
+                    ElMessage.warning('请先选择数据源');
+                    tableSelectionVisible.value = false;
+                }
+            } catch (error) {
+                ElMessage.error('获取表列表失败: ' + error.message);
+                tableList.value = [];
+            } finally {
+                loadingTables.value = false;
             }
         }
 
@@ -1237,12 +1365,37 @@ export default {
                 let tables = [];
                 
                 const config = type === 'source' ? sourceCommonConfig.value : sinkCommonConfig.value;
-                const connectorType = table.connectorType || config.connectorType;
+                const connectorType = config.connectorType;
                 
-                if (config.datasourceId) {
+                table.connectorType = connectorType;
+                
+                if (connectorType === 'kafka') {
+                    if (!config.datasourceId) {
+                        ElMessage.warning('请先选择Kafka数据源');
+                        loadingTables.value = false;
+                        return;
+                    }
+                    const response = await fetch('/api/datasources/' + config.datasourceId + '/topics');
+                    const data = await response.json();
+                    if (data.topics) {
+                        tables = data.topics;
+                    }
+                    tableList.value = tables.map(t => ({ table_name: t, table_type: 'TOPIC' }));
+                    if (tableList.value.length === 0) {
+                        ElMessage.info('该Kafka没有Topic');
+                    } else {
+                        ElMessage.success('获取Topic列表成功');
+                    }
+                } else if (config.datasourceId) {
                     const response = await fetch('/api/datasources/' + config.datasourceId + '/tables');
                     const data = await response.json();
                     tables = data.tables || [];
+                    tableList.value = tables.map(t => ({ table_name: t, table_type: 'TABLE' }));
+                    if (tableList.value.length === 0) {
+                        ElMessage.info('该数据库没有表');
+                    } else {
+                        ElMessage.success('获取表列表成功');
+                    }
                 } else {
                     let host, port, database, username, password;
                     
@@ -1318,13 +1471,12 @@ export default {
                     });
                     const data = await response.json();
                     tables = data.tables || [];
-                }
-
-                tableList.value = tables.map(t => ({ table_name: t, table_type: 'TABLE' }));
-                if (tableList.value.length === 0) {
-                    ElMessage.info('该数据库没有表');
-                } else {
-                    ElMessage.success('获取表列表成功');
+                    tableList.value = tables.map(t => ({ table_name: t, table_type: 'TABLE' }));
+                    if (tableList.value.length === 0) {
+                        ElMessage.info('该数据库没有表');
+                    } else {
+                        ElMessage.success('获取表列表成功');
+                    }
                 }
             } catch (error) {
                 ElMessage.error('获取表列表失败: ' + error.message);
@@ -1355,8 +1507,11 @@ export default {
         async function selectMultipleTablesFromCommon(tableNames) {
             const config = sourceCommonConfig.value;
             const dbName = config.database;
+            const isKafka = config.connectorType === 'kafka';
             
             sourceTables.value = sourceTables.value.filter(t => t.tableName && t.tableName.trim() !== '');
+            
+            const newTables = [];
             
             for (let i = 0; i < tableNames.length; i++) {
                 const tableName = tableNames[i];
@@ -1364,13 +1519,16 @@ export default {
                 let flinkTableName = tableName;
                 let physicalTableName = tableName;
                 
-                const hasDbPrefix = tableName.includes('.');
-                const cleanTableName = hasDbPrefix ? tableName.split('.').pop() : tableName;
-                flinkTableName = dbName + '_' + cleanTableName;
+                if (!isKafka) {
+                    const hasDbPrefix = tableName.includes('.');
+                    const cleanTableName = hasDbPrefix ? tableName.split('.').pop() : tableName;
+                    flinkTableName = dbName + '_' + cleanTableName;
+                    physicalTableName = cleanTableName;
+                }
                 
                 const newTable = {
                     tableName: flinkTableName,
-                    physicalTableName: cleanTableName,
+                    physicalTableName: isKafka ? tableName : physicalTableName,
                     connectorType: config.connectorType,
                     datasourceId: config.datasourceId,
                     fields: [],
@@ -1381,54 +1539,92 @@ export default {
                     cdcIncrementalSnapshot: config.incrementalSnapshot
                 };
                 
-                try {
-                    const hostPort = config.host || '';
-                    const parts = hostPort.split(':');
-                    const host = parts[0] || '';
-                    const port = parseInt(parts[1]) || 3306;
-                    
-                    const response = await fetch('/api/metadata/columns?table_name=' + encodeURIComponent(cleanTableName), {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            host, port,
-                            database: config.database,
-                            username: config.username,
-                            password: config.password
-                        })
-                    });
-                    
-                    if (response.ok) {
-                        const result = await response.json();
-                        if (result.columns && result.columns.length > 0) {
-                            newTable.fields = result.columns.map(f => ({
-                                name: f.name,
-                                type: f.type || 'STRING',
-                                precision: f.precision || '',
-                                scale: f.scale || '',
-                                primaryKey: f.primaryKey || false
-                            }));
-                        }
-                    }
-                } catch (e) {
-                    console.warn('获取表字段失败:', e);
+                if (isKafka) {
+                    newTable.kafkaTopic = tableName;
+                    newTable.kafkaBootstrapServers = config.kafkaBootstrapServers;
+                    newTable.kafkaGroup = config.kafkaGroup;
+                    newTable.kafkaStartMode = config.kafkaStartMode;
+                    newTable.kafkaStartTimestamp = config.kafkaStartTimestamp;
+                    newTable.kafkaSpecificOffsets = config.kafkaSpecificOffsets;
+                    newTable.format = config.kafkaFormat;
                 }
                 
-                sourceTables.value.push(newTable);
+                newTables.push({ table: newTable, physicalTableName });
+            }
+            
+            if (isKafka) {
+                const schemaPromises = newTables.map(async (item) => {
+                    try {
+                        const response = await fetch('/api/datasources/' + config.datasourceId + '/topics/' + encodeURIComponent(item.table.kafkaTopic) + '/schema');
+                        const data = await response.json();
+                        if (data.columns && data.columns.length > 0) {
+                            item.table.fields = data.columns.map(col => ({
+                                name: col.name,
+                                type: col.type || 'STRING',
+                                precision: '',
+                                scale: '',
+                                primaryKey: col.primaryKey || false
+                            }));
+                        }
+                    } catch (e) {
+                        console.warn('获取Kafka Topic Schema失败:', e);
+                    }
+                });
+                await Promise.all(schemaPromises);
+            } else {
+                const hostPort = config.host || '';
+                const parts = hostPort.split(':');
+                const host = parts[0] || '';
+                const port = parseInt(parts[1]) || 3306;
+                
+                const columnPromises = newTables.map(async (item) => {
+                    try {
+                        const response = await fetch('/api/metadata/columns?table_name=' + encodeURIComponent(item.physicalTableName), {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                host, port,
+                                database: config.database,
+                                username: config.username,
+                                password: config.password
+                            })
+                        });
+                        
+                        if (response.ok) {
+                            const result = await response.json();
+                            if (result.columns && result.columns.length > 0) {
+                                item.table.fields = result.columns.map(f => ({
+                                    name: f.name,
+                                    type: f.type || 'STRING',
+                                    precision: f.precision || '',
+                                    scale: f.scale || '',
+                                    primaryKey: f.primaryKey || false
+                                }));
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('获取表字段失败:', e);
+                    }
+                });
+                await Promise.all(columnPromises);
+            }
+            
+            for (const item of newTables) {
+                sourceTables.value.push(item.table);
                 
                 sinkTables.value = sinkTables.value.filter(t => t.tableName && t.tableName.trim() !== '');
                 
-                const sinkTable = createSinkTableFromSource(newTable, flinkTableName);
+                const sinkTable = createSinkTableFromSource(item.table, item.table.tableName);
                 sinkTables.value.push(sinkTable);
                 
                 queries.value = queries.value.filter(q => q.sinkTable && q.sinkTable.trim() !== '');
                 
                 const newQuery = {
                     sinkTable: sinkTable.tableName,
-                    sourceTable: flinkTableName,
+                    sourceTable: item.table.tableName,
                     queryType: 'insert',
-                    selectFields: newTable.fields.map(f => f.name),
-                    selectedFields: newTable.fields.map(f => f.name),
+                    selectFields: item.table.fields.map(f => f.name),
+                    selectedFields: item.table.fields.map(f => f.name),
                     groupByFields: [],
                     aggregates: [],
                     whereClause: '',
@@ -1455,6 +1651,8 @@ export default {
             if (!currentTable.value || tableNames.length === 0) return;
             
             const baseTable = currentTable.value;
+            const connectorType = baseTable.connectorType || sourceCommonConfig.value.connectorType;
+            const isKafka = connectorType === 'kafka';
             const dbName = getDatabaseName(baseTable);
             const isJdbc = baseTable.connectorType === 'jdbc' || baseTable.connectorType === 'jdbc-upsert';
             const isSource = currentTableType.value === 'source';
@@ -1470,58 +1668,88 @@ export default {
                     newTable.fields = [];
                 }
                 
-                let flinkTableName = tableName;
-                let connectorTableName = tableName;
-                
-                if (!isJdbc && dbName) {
-                    const hasDbPrefix = tableName.includes('.');
-                    const cleanTableName = hasDbPrefix ? tableName.split('.').pop() : tableName;
+                if (isKafka) {
+                    newTable.tableName = tableName;
+                    newTable.kafkaTopic = tableName;
+                    newTable.physicalTableName = tableName;
+                    newTable.kafkaBootstrapServers = sourceCommonConfig.value.kafkaBootstrapServers;
+                    newTable.kafkaGroup = sourceCommonConfig.value.kafkaGroup;
+                    newTable.kafkaStartMode = sourceCommonConfig.value.kafkaStartMode;
+                    newTable.kafkaStartTimestamp = sourceCommonConfig.value.kafkaStartTimestamp;
+                    newTable.kafkaSpecificOffsets = sourceCommonConfig.value.kafkaSpecificOffsets;
+                    newTable.format = sourceCommonConfig.value.kafkaFormat;
                     
-                    flinkTableName = dbName + '_' + cleanTableName;
-                    connectorTableName = dbName + '.' + cleanTableName;
-                }
-                
-                newTable.tableName = flinkTableName;
-                
-                if (isJdbc) {
-                    newTable.jdbcTable = tableName;
-                } else if (newTable.connectorType === 'mysql-cdc') {
-                    newTable.mysqlTable = connectorTableName;
-                } else if (newTable.connectorType === 'oracle-cdc') {
-                    newTable.oracleTable = connectorTableName;
-                } else if (newTable.connectorType === 'sqlserver-cdc') {
-                    newTable.sqlserverTable = connectorTableName;
-                } else if (newTable.connectorType === 'postgres-cdc') {
-                    newTable.postgresTable = connectorTableName;
-                } else if (newTable.connectorType === 'tidb-cdc') {
-                    newTable.tidbTable = connectorTableName;
-                } else if (newTable.connectorType === 'oceanbase-cdc') {
-                    newTable.oceanbaseTable = connectorTableName;
-                } else if (newTable.connectorType === 'doris') {
-                    newTable.dorisTable = connectorTableName;
-                } else if (newTable.connectorType === 'starrocks') {
-                    newTable.starrocksTable = connectorTableName;
-                } else {
-                    newTable.jdbcTable = tableName;
-                }
-                
-                if (newTable.datasourceId) {
                     try {
-                        const response = await fetch('/api/datasources/' + newTable.datasourceId + '/tables/' + encodeURIComponent(tableName) + '/columns');
+                        const response = await fetch('/api/datasources/' + sourceCommonConfig.value.datasourceId + '/topics/' + encodeURIComponent(tableName) + '/schema');
                         const data = await response.json();
                         if (data.columns && data.columns.length > 0) {
                             newTable.fields = data.columns.map(col => ({
                                 name: col.name,
-                                type: col.type,
+                                type: col.type || 'STRING',
                                 precision: '',
                                 scale: '',
                                 primaryKey: col.primaryKey || false
                             }));
                         }
                     } catch (e) {
-                        console.warn('获取表字段失败:', e);
+                        console.warn('获取Kafka Topic Schema失败:', e);
+                    }
+                } else {
+                    let flinkTableName = tableName;
+                    let connectorTableName = tableName;
+                    
+                    if (!isJdbc && dbName) {
+                        const hasDbPrefix = tableName.includes('.');
+                        const cleanTableName = hasDbPrefix ? tableName.split('.').pop() : tableName;
+                        
+                        flinkTableName = dbName + '_' + cleanTableName;
+                        connectorTableName = dbName + '.' + cleanTableName;
+                    }
+                    
+                    newTable.tableName = flinkTableName;
+                    
+                    if (isJdbc) {
+                        newTable.jdbcTable = tableName;
+                    } else if (newTable.connectorType === 'mysql-cdc') {
+                        newTable.mysqlTable = connectorTableName;
+                    } else if (newTable.connectorType === 'oracle-cdc') {
+                        newTable.oracleTable = connectorTableName;
+                    } else if (newTable.connectorType === 'sqlserver-cdc') {
+                        newTable.sqlserverTable = connectorTableName;
+                    } else if (newTable.connectorType === 'postgres-cdc') {
+                        newTable.postgresTable = connectorTableName;
+                    } else if (newTable.connectorType === 'tidb-cdc') {
+                        newTable.tidbTable = connectorTableName;
+                    } else if (newTable.connectorType === 'oceanbase-cdc') {
+                        newTable.oceanbaseTable = connectorTableName;
+                    } else if (newTable.connectorType === 'doris') {
+                        newTable.dorisTable = connectorTableName;
+                    } else if (newTable.connectorType === 'starrocks') {
+                        newTable.starrocksTable = connectorTableName;
+                    } else {
+                        newTable.jdbcTable = tableName;
+                    }
+                    
+                    if (newTable.datasourceId) {
+                        try {
+                            const response = await fetch('/api/datasources/' + newTable.datasourceId + '/tables/' + encodeURIComponent(tableName) + '/columns');
+                            const data = await response.json();
+                            if (data.columns && data.columns.length > 0) {
+                                newTable.fields = data.columns.map(col => ({
+                                    name: col.name,
+                                    type: col.type,
+                                    precision: '',
+                                    scale: '',
+                                    primaryKey: col.primaryKey || false
+                                }));
+                            }
+                        } catch (e) {
+                            console.warn('获取表字段失败:', e);
+                        }
                     }
                 }
+                
+                const flinkTableName = newTable.tableName;
                 
                 if (i > 0) {
                     if (isSource) {
@@ -1579,6 +1807,78 @@ export default {
         async function selectTable(tableName) {
             if (currentTable.value) {
                 const table = currentTable.value;
+                const isSink = currentTableType.value === 'sink';
+                const config = isSink ? sinkCommonConfig.value : sourceCommonConfig.value;
+                const connectorType = table.connectorType || config.connectorType;
+                
+                if (connectorType === 'kafka') {
+                    table.tableName = tableName;
+                    table.kafkaTopic = tableName;
+                    table.physicalTableName = tableName;
+                    table.kafkaBootstrapServers = config.kafkaBootstrapServers;
+                    table.kafkaGroup = config.kafkaGroup;
+                    table.kafkaStartMode = config.kafkaStartMode;
+                    table.kafkaStartTimestamp = config.kafkaStartTimestamp;
+                    table.kafkaSpecificOffsets = config.kafkaSpecificOffsets;
+                    table.format = config.kafkaFormat;
+                    
+                    try {
+                        const response = await fetch('/api/datasources/' + config.datasourceId + '/topics/' + encodeURIComponent(tableName) + '/schema');
+                        const data = await response.json();
+                        if (data.columns && data.columns.length > 0) {
+                            table.fields = data.columns.map(col => ({
+                                name: col.name,
+                                type: col.type || 'STRING',
+                                precision: '',
+                                scale: '',
+                                primaryKey: col.primaryKey || false
+                            }));
+                            tableSelectionVisible.value = false;
+                            ElMessage.success('已选择Topic: ' + tableName + '，' + data.message);
+                        } else {
+                            table.fields = [];
+                            tableSelectionVisible.value = false;
+                            ElMessage.warning('已选择Topic: ' + tableName + '，' + (data.message || '请手动配置字段'));
+                        }
+                    } catch (e) {
+                        console.error('获取Topic Schema失败:', e);
+                        table.fields = [];
+                        tableSelectionVisible.value = false;
+                        ElMessage.warning('已选择Topic: ' + tableName + '，获取字段失败，请手动配置');
+                    }
+                    return;
+                }
+                
+                table.tableName = tableName;
+                table.physicalTableName = tableName;
+                
+                if (config.datasourceId) {
+                    try {
+                        const response = await fetch('/api/datasources/' + config.datasourceId + '/tables/' + encodeURIComponent(tableName) + '/columns');
+                        const data = await response.json();
+                        if (data.columns && data.columns.length > 0) {
+                            table.fields = data.columns.map(col => ({
+                                name: col.name,
+                                type: col.type || 'STRING',
+                                precision: '',
+                                scale: '',
+                                primaryKey: col.primaryKey || false
+                            }));
+                            tableSelectionVisible.value = false;
+                            ElMessage.success('已选择表: ' + tableName + '，共 ' + data.columns.length + ' 个字段');
+                        } else {
+                            table.fields = [];
+                            tableSelectionVisible.value = false;
+                            ElMessage.warning('已选择表: ' + tableName + '，未获取到字段信息');
+                        }
+                    } catch (e) {
+                        console.error('获取表字段失败:', e);
+                        tableSelectionVisible.value = false;
+                        ElMessage.warning('已选择表: ' + tableName + '，获取字段失败');
+                    }
+                    return;
+                }
+                
                 const dbName = getDatabaseName(table);
                 
                 let flinkTableName = tableName;
@@ -1812,10 +2112,22 @@ export default {
             
             if (connectorType === 'kafka') {
                 withOptions.push('    \'topic\' = \'' + table.kafkaTopic + '\'');
-                withOptions.push('    \'properties.bootstrap.servers\' = \'' + (table.kafkaBootstrapServers || config.kafkaBootstrapServers || 'localhost:9092') + '\'');
-                withOptions.push('    \'properties.group.id\' = \'' + (table.kafkaGroup || config.kafkaGroup || 'flink-consumer') + '\'');
-                withOptions.push('    \'scan.startup.mode\' = \'' + (table.kafkaStartMode || config.kafkaStartMode || 'latest') + '\'');
-                withOptions.push('    \'format\' = \'' + (table.format || config.kafkaFormat || 'json') + '\'');
+                withOptions.push('    \'properties.bootstrap.servers\' = \'' + (config.kafkaBootstrapServers || table.kafkaBootstrapServers || 'localhost:9092') + '\'');
+                withOptions.push('    \'properties.group.id\' = \'' + (config.kafkaGroup || table.kafkaGroup || 'flink-consumer') + '\'');
+                
+                const startMode = config.kafkaStartMode || table.kafkaStartMode || 'latest-offset';
+                withOptions.push('    \'scan.startup.mode\' = \'' + startMode + '\'');
+                
+                if (startMode === 'timestamp' && (config.kafkaStartTimestamp || table.kafkaStartTimestamp)) {
+                    withOptions.push('    \'scan.startup.timestamp-millis\' = \'' + (config.kafkaStartTimestamp || table.kafkaStartTimestamp) + '\'');
+                }
+                if (startMode === 'specific-offsets' && (config.kafkaSpecificOffsets || table.kafkaSpecificOffsets)) {
+                    withOptions.push('    \'scan.startup.specific-offsets\' = \'' + (config.kafkaSpecificOffsets || table.kafkaSpecificOffsets) + '\'');
+                }
+                
+                withOptions.push('    \'format\' = \'' + (config.kafkaFormat || table.format || 'json') + '\'');
+                withOptions.push('    \'properties.auto.offset.reset\' = \'latest\'');
+                withOptions.push('    \'properties.enable.auto.commit\' = \'false\'');
             } else if (connectorType === 'jdbc') {
                 withOptions.push('    \'url\' = \'' + (table.jdbcUrl || '') + '\'');
                 withOptions.push('    \'table-name\' = \'' + physicalTable + '\'');
@@ -2043,6 +2355,11 @@ export default {
                 sql += `SET 'execution.checkpointing.interval' = '30000ms';\n`;
                 sql += `SET 'execution.checkpointing.mode' = 'EXACTLY_ONCE';\n`;
             }
+            
+            if (flinkConfig.value.checkpoint_path) {
+                sql += `SET 'execution.checkpointing.dir' = '${flinkConfig.value.checkpoint_path}';\n`;
+            }
+            
             sql += '\n';
             sourceTables.value.forEach(table => { sql += generateSourceTableSQL(table); });
             sinkTables.value.forEach(table => { sql += generateSinkTableSQL(table); });
@@ -2523,6 +2840,20 @@ export default {
             } catch (e) {
                 console.error('加载数据源失败', e);
             }
+            
+            try {
+                const res = await fetch('/api/flink-config');
+                const configs = await res.json();
+                configs.forEach(config => {
+                    if (config.config_key === 'checkpoint_path') {
+                        flinkConfig.value.checkpoint_path = config.config_value;
+                    } else if (config.config_key === 'savepoint_path') {
+                        flinkConfig.value.savepoint_path = config.config_value;
+                    }
+                });
+            } catch (e) {
+                console.error('加载Flink配置失败', e);
+            }
         });
 
         return {
@@ -2543,6 +2874,8 @@ export default {
             getSourceDatasourcesForConnector, handleSourceCommonConnectorChange, updateSourceCommonHostPort,
             applySourceCommonDatasource, applyCommonConfigToAllSources, refreshSourceTableFields,
             refreshSinkTableFields,
+            openSinkTableSelection,
+            syncFieldsFromSource,
             openSourceCommonTableSelection,
             handleSinkConnectorChange, openTableSelection, selectTable, loadFieldsFromDb,
             handleTableSelectionChange, confirmTableSelection,
@@ -2628,7 +2961,7 @@ export default {
                                         <el-input v-model="sourceCommonConfig.host" placeholder="localhost:3306" @input="updateSourceCommonHostPort" />
                                     </el-form-item>
                                 </el-col>
-                                <el-col :span="6">
+                                <el-col :span="6" v-if="sourceCommonConfig.connectorType !== 'kafka'">
                                     <el-form-item label="数据库">
                                         <el-input v-model="sourceCommonConfig.database" placeholder="数据库名" />
                                     </el-form-item>
@@ -2650,7 +2983,7 @@ export default {
                                         <el-input v-model="sourceCommonConfig.password" type="password" placeholder="密码" />
                                     </el-form-item>
                                 </el-col>
-                                <el-col :span="6">
+                                <el-col :span="6" v-if="sourceCommonConfig.connectorType !== 'kafka'">
                                     <el-form-item label="启动模式">
                                         <el-select v-model="sourceCommonConfig.scanMode" style="width: 100%;">
                                             <el-option label="全量+增量" value="initial" />
@@ -2745,15 +3078,45 @@ export default {
                                 <el-col :span="6">
                                     <el-form-item label="启动模式">
                                         <el-select v-model="sourceCommonConfig.kafkaStartMode" style="width: 100%;">
-                                            <el-option label="最新" value="latest" />
-                                            <el-option label="最早" value="earliest" />
+                                            <el-option label="最早" value="earliest-offset" />
+                                            <el-option label="最新" value="latest-offset" />
+                                            <el-option label="消费组位点" value="group-offsets" />
                                             <el-option label="指定时间戳" value="timestamp" />
+                                            <el-option label="特定位点" value="specific-offsets" />
                                         </el-select>
                                     </el-form-item>
                                 </el-col>
                             </el-row>
+                            <el-row :gutter="20" v-if="sourceCommonConfig.connectorType === 'kafka' && sourceCommonConfig.kafkaStartMode === 'timestamp'">
+                                <el-col :span="12">
+                                    <el-form-item label="启动时间戳">
+                                        <el-input v-model="sourceCommonConfig.kafkaStartTimestamp" placeholder="毫秒时间戳，如: 1672531200000">
+                                            <template #append>
+                                                <el-popover placement="top" :width="300" trigger="click">
+                                    <template #reference>
+                                        <el-button><el-icon><Calendar /></el-icon></el-button>
+                                    </template>
+                                    <el-date-picker
+                                        v-model="sourceCommonConfig.kafkaStartTimestampDate"
+                                        type="datetime"
+                                        placeholder="选择日期时间"
+                                        @change="sourceCommonConfig.kafkaStartTimestamp = String($event.getTime())"
+                                    />
+                                </el-popover>
+                                            </template>
+                                        </el-input>
+                                    </el-form-item>
+                                </el-col>
+                            </el-row>
+                            <el-row :gutter="20" v-if="sourceCommonConfig.connectorType === 'kafka' && sourceCommonConfig.kafkaStartMode === 'specific-offsets'">
+                                <el-col :span="24">
+                                    <el-form-item label="特定位点">
+                                        <el-input v-model="sourceCommonConfig.kafkaSpecificOffsets" placeholder="格式: partition:0,offset:42;partition:1,offset:300" />
+                                    </el-form-item>
+                                </el-col>
+                            </el-row>
                             <el-row :gutter="20" v-if="sourceCommonConfig.connectorType === 'kafka'">
-                                <el-col :span="6">
+                                <el-col :span="12">
                                     <el-form-item label="消息格式">
                                         <el-select v-model="sourceCommonConfig.kafkaFormat" style="width: 100%;">
                                             <el-option label="JSON" value="json" />
@@ -2780,14 +3143,15 @@ export default {
                                         </el-form-item>
                                     </el-col>
                                     <el-col :span="8">
-                                        <el-form-item label="物理表名">
+                                        <el-form-item :label="sourceCommonConfig.connectorType === 'kafka' ? 'Topic' : '物理表名'">
                                             <div style="display: flex; gap: 8px;">
-                                                <el-input v-model="table.physicalTableName" placeholder="数据库表名" style="flex: 1;" />
-                                                <el-button size="small" @click="openTableSelection(table, 'source')"><el-icon><Search /></el-icon> 选表</el-button>
+                                                <el-input v-if="sourceCommonConfig.connectorType === 'kafka'" v-model="table.kafkaTopic" placeholder="Kafka Topic" style="flex: 1;" />
+                                                <el-input v-else v-model="table.physicalTableName" placeholder="数据库表名" style="flex: 1;" />
+                                                <el-button size="small" @click="openTableSelection(table, 'source')"><el-icon><Search /></el-icon> {{ sourceCommonConfig.connectorType === 'kafka' ? '选Topic' : '选表' }}</el-button>
                                             </div>
                                         </el-form-item>
                                     </el-col>
-                                    <el-col :span="8">
+                                    <el-col :span="8" v-if="sourceCommonConfig.connectorType !== 'kafka'">
                                         <el-form-item label=" ">
                                             <el-button size="small" @click="refreshSourceTableFields(table)"><el-icon><Refresh /></el-icon> 刷新表结构</el-button>
                                         </el-form-item>
@@ -2878,28 +3242,6 @@ export default {
                         <el-row :gutter="20">
                             <el-col :span="12"><el-form-item label="用户名"><el-input v-model="sinkCommonConfig.dorisUsername" placeholder="用户名" /></el-form-item></el-col>
                             <el-col :span="12"><el-form-item label="密码"><el-input v-model="sinkCommonConfig.dorisPassword" type="password" placeholder="密码" /></el-form-item></el-col>
-                        </el-row>
-                    </div>
-
-                    <div v-if="['jdbc', 'jdbc-upsert', 'postgres-jdbc', 'oracle-jdbc', 'sqlserver-jdbc'].includes(sinkCommonConfig.connectorType)">
-                        <el-row :gutter="20">
-                            <el-col :span="12"><el-form-item label="JDBC URL"><el-input v-model="sinkCommonConfig.jdbcUrl" placeholder="jdbc:mysql://localhost:3306/db" /></el-form-item></el-col>
-                            <el-col :span="12"><el-form-item label="驱动类"><el-input v-model="sinkCommonConfig.jdbcDriver" placeholder="com.mysql.cj.jdbc.Driver" /></el-form-item></el-col>
-                        </el-row>
-                        <el-row :gutter="20">
-                            <el-col :span="12"><el-form-item label="用户名"><el-input v-model="sinkCommonConfig.jdbcUsername" placeholder="用户名" /></el-form-item></el-col>
-                            <el-col :span="12"><el-form-item label="密码"><el-input v-model="sinkCommonConfig.jdbcPassword" type="password" placeholder="密码" /></el-form-item></el-col>
-                        </el-row>
-                    </div>
-
-                    <div v-if="sinkCommonConfig.connectorType === 'starrocks'">
-                        <el-row :gutter="20">
-                            <el-col :span="12"><el-form-item label="FE 地址"><el-input v-model="sinkCommonConfig.starrocksUrl" placeholder="jdbc:mysql://localhost:9030/db" /></el-form-item></el-col>
-                            <el-col :span="12"><el-form-item label="驱动类"><el-input v-model="sinkCommonConfig.starrocksDriver" placeholder="com.mysql.cj.jdbc.Driver" /></el-form-item></el-col>
-                        </el-row>
-                        <el-row :gutter="20">
-                            <el-col :span="12"><el-form-item label="用户名"><el-input v-model="sinkCommonConfig.starrocksUsername" placeholder="用户名" /></el-form-item></el-col>
-                            <el-col :span="12"><el-form-item label="密码"><el-input v-model="sinkCommonConfig.starrocksPassword" type="password" placeholder="密码" /></el-form-item></el-col>
                         </el-row>
                     </div>
 
@@ -3006,6 +3348,8 @@ export default {
                     <el-divider content-position="left">字段配置</el-divider>
                     <div style="margin-bottom: 10px;">
                         <el-button size="small" @click="addField(table)"><el-icon><Plus /></el-icon> 添加字段</el-button>
+                        <el-button size="small" @click="syncFieldsFromSource(table)"><el-icon><Refresh /></el-icon> 从源表同步字段</el-button>
+                        <el-button size="small" @click="openSinkTableSelection(table)"><el-icon><List /></el-icon> 选表</el-button>
                         <el-button size="small" @click="refreshSinkTableFields(table)"><el-icon><Refresh /></el-icon> 刷新表结构</el-button>
                     </div>
                     <div v-for="(field, fIndex) in table.fields" :key="fIndex" style="margin-bottom: 10px;">
@@ -3198,12 +3542,12 @@ export default {
     </template>
 </el-dialog>
 
-<el-dialog v-model="tableSelectionVisible" title="选择表（可多选）" width="600px">
+<el-dialog v-model="tableSelectionVisible" :title="sourceCommonConfig.connectorType === 'kafka' ? '选择Topic（可多选）' : '选择表（可多选）'" width="600px">
     <div v-if="loadingTables" style="text-align: center; padding: 40px;"><el-icon class="is-loading"><Loading /></el-icon> 加载中...</div>
-    <div v-else-if="tableList.length === 0" style="text-align: center; padding: 40px; color: #999;">暂无表数据</div>
+    <div v-else-if="tableList.length === 0" style="text-align: center; padding: 40px; color: #999;">{{ sourceCommonConfig.connectorType === 'kafka' ? '暂无Topic数据' : '暂无表数据' }}</div>
     <el-table v-else :data="tableList" style="width: 100%;" row-key="table_name" @selection-change="handleTableSelectionChange">
         <el-table-column type="selection" width="55" />
-        <el-table-column prop="table_name" label="表名" min-width="200" />
+        <el-table-column prop="table_name" :label="sourceCommonConfig.connectorType === 'kafka' ? 'Topic名称' : '表名'" min-width="200" />
         <el-table-column prop="table_type" label="类型" width="120" />
     </el-table>
     <template #footer>

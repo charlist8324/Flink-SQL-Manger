@@ -393,7 +393,7 @@ class FlinkClient:
         return await self._request("GET", f"/jars/{jar_id}/plan", params=params)
 
     # ============ SQL Gateway ============
-    async def create_session(self, session_name: str = None, job_name: str = None, savepoint_path: str = None) -> Dict[str, Any]:
+    async def create_session(self, session_name: str = None, job_name: str = None, savepoint_path: str = None, checkpoint_path: str = None) -> Dict[str, Any]:
         """创建 SQL Gateway 会话"""
         body = {}
         if session_name:
@@ -413,6 +413,16 @@ class FlinkClient:
             # 在会话级别设置savepoint路径（关键！）
             properties["execution.savepoint.path"] = savepoint_path
             logger.info(f"✅ 设置savepoint路径: {savepoint_path}")
+        if checkpoint_path:
+            # 在会话级别设置checkpoint路径
+            # Flink 1.18 使用 state.checkpoints.dir 而不是 execution.checkpointing.dir
+            properties["state.checkpoints.dir"] = checkpoint_path
+            logger.info(f"✅ 设置checkpoint路径: {checkpoint_path}")
+        
+        # 开启外部Checkpoint保留，确保任务取消后Checkpoint不被删除
+        properties["execution.checkpointing.externalized-checkpoint-retention"] = "RETAIN_ON_CANCELLATION"
+        logger.info(f"✅ 开启外部Checkpoint保留: RETAIN_ON_CANCELLATION")
+        
         body["properties"] = properties
         return await self._request("POST", "/v1/sessions", json=body, use_sql_gateway=True)
 
@@ -452,20 +462,23 @@ class FlinkClient:
         """关闭会话"""
         return await self._request("DELETE", f"/v1/sessions/{session_handle}", use_sql_gateway=True)
 
-    async def submit_sql_job(self, sql: str, job_name: str = None, parallelism: int = 1, savepoint_path: Optional[str] = None) -> Dict[str, Any]:
+    async def submit_sql_job(self, sql: str, job_name: str = None, parallelism: int = 1, savepoint_path: Optional[str] = None, checkpoint_path: Optional[str] = None) -> Dict[str, Any]:
         """
         直接提交 SQL 作业（通过 SQL Gateway）
         返回作业 ID
         支持多个 SQL 语句，按顺序执行
         """
-        # 创建会话，在会话级别设置作业名称和savepoint路径
+        # 创建会话，在会话级别设置作业名称、savepoint路径和checkpoint路径
         logger.info(f"创建 SQL Gateway 会话，作业名称: {job_name or 'flink-manager-session'}")
         if savepoint_path:
             logger.info(f"✅ Savepoint路径: {savepoint_path}")
+        if checkpoint_path:
+            logger.info(f"✅ Checkpoint路径: {checkpoint_path}")
         session = await self.create_session(
             session_name=job_name or "flink-manager-session", 
             job_name=job_name,
-            savepoint_path=savepoint_path
+            savepoint_path=savepoint_path,
+            checkpoint_path=checkpoint_path
         )
         session_handle = session.get("sessionHandle")
         logger.info(f"会话句柄: {session_handle}")
@@ -507,7 +520,7 @@ class FlinkClient:
                     session_handle, 
                     stmt, 
                     job_name=job_name
-                    # 注意：savepoint_path已在会话级别设置，不需要在这里重复设置
+                    # 注意：checkpoint_path已在会话级别设置
                 )
                 logger.info(f"执行结果: {result}")
 

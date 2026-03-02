@@ -98,14 +98,15 @@ class SavepointRequest(BaseModel):
 class ResumeJobRequest(BaseModel):
     job_id: str
     savepoint_path: Optional[str] = None
-    timestamp: Optional[str] = None # 前端传递的 savepoint 时间
+    timestamp: Optional[str] = None  # 前端传递的 savepoint 时间
+    checkpoint_path: Optional[str] = None  # 从checkpoint恢复的路径
 
 # ============ 数据源相关 ============
 class DataSourceBase(BaseModel):
     name: str
     type: str
-    host: str
-    port: int
+    host: Optional[str] = None
+    port: Optional[int] = None
     username: Optional[str] = None
     password: Optional[str] = None
     database: Optional[str] = None

@@ -57,9 +57,18 @@ export default {
 
         // 测试连接 - 按照旧版实现
         async function testConnection() {
-            if (!datasourceForm.type || !datasourceForm.host || !datasourceForm.port) {
-                ElMessage.warning('请至少填写类型、主机和端口');
-                return;
+            // Kafka类型验证
+            if (datasourceForm.type === 'kafka') {
+                if (!datasourceForm.host) {
+                    ElMessage.warning('请填写主机地址（Kafka Bootstrap Servers）');
+                    return;
+                }
+            } else {
+                // 数据库类型验证
+                if (!datasourceForm.type || !datasourceForm.host || !datasourceForm.port) {
+                    ElMessage.warning('请至少填写类型、主机和端口');
+                    return;
+                }
             }
             
             testingConnection.value = true;
@@ -73,7 +82,7 @@ export default {
                     database: datasourceForm.database,
                     username: datasourceForm.username,
                     password: datasourceForm.password,
-                    properties: {}
+                    properties: datasourceForm.properties || {}
                 };
                 
                 const response = await fetch('/api/datasources/test', {
@@ -218,6 +227,9 @@ export default {
                 datasourceForm.port = 9030;
             } else if (type === 'clickhouse') {
                 datasourceForm.port = 8123;
+            } else if (type === 'kafka') {
+                datasourceForm.port = 9092;
+                datasourceForm.properties = datasourceForm.properties || {};
             }
         }
 
@@ -259,7 +271,8 @@ export default {
         </el-table-column>
         <el-table-column label="连接信息" min-width="250" show-overflow-tooltip>
             <template #default="{ row }">
-                <span>{{ row.host }}:{{ row.port }} / {{ row.database }}</span>
+                <span v-if="row.type === 'kafka'">{{ row.host }}{{ row.port ? ':' + row.port : '' }}</span>
+                <span v-else>{{ row.host }}:{{ row.port }} / {{ row.database }}</span>
             </template>
         </el-table-column>
         <el-table-column prop="username" label="用户名" width="120" show-overflow-tooltip />
@@ -272,8 +285,8 @@ export default {
         </el-table-column>
     </el-table>
 
-    <el-dialog v-model="datasourceDialogVisible" :title="datasourceForm.id ? '编辑数据源' : '添加数据源'" width="600px">
-        <el-form :model="datasourceForm" label-width="100px">
+    <el-dialog v-model="datasourceDialogVisible" :title="datasourceForm.id ? '编辑数据源' : '添加数据源'" width="650px">
+        <el-form :model="datasourceForm" label-width="120px">
             <el-form-item label="别名" required>
                 <el-input v-model="datasourceForm.name" placeholder="用于识别数据源" />
             </el-form-item>
@@ -286,23 +299,58 @@ export default {
                     <el-option label="Doris" value="doris" />
                     <el-option label="StarRocks" value="starrocks" />
                     <el-option label="ClickHouse" value="clickhouse" />
+                    <el-option label="Kafka" value="kafka" />
                 </el-select>
             </el-form-item>
-            <el-form-item label="主机" required>
-                <el-input v-model="datasourceForm.host" placeholder="IP地址或主机名" />
-            </el-form-item>
-            <el-form-item label="端口" required>
-                <el-input-number v-model="datasourceForm.port" :min="1" :max="65535" style="width: 100%;" />
-            </el-form-item>
-            <el-form-item label="数据库" required>
-                <el-input v-model="datasourceForm.database" placeholder="数据库名称" />
-            </el-form-item>
-            <el-form-item label="用户名" required>
-                <el-input v-model="datasourceForm.username" placeholder="数据库用户名" />
-            </el-form-item>
-            <el-form-item label="密码" required>
-                <el-input v-model="datasourceForm.password" type="password" placeholder="数据库密码" show-password />
-            </el-form-item>
+            
+            <!-- Kafka 配置 -->
+            <template v-if="datasourceForm.type === 'kafka'">
+                <el-form-item label="主机地址" required>
+                    <el-input v-model="datasourceForm.host" placeholder="kafka1:9092,kafka2:9092" />
+                    <div style="color: #909399; font-size: 12px; margin-top: 4px;">Kafka Bootstrap Servers，多个地址用逗号分隔，Topic在编制作业时指定</div>
+                </el-form-item>
+                <el-form-item label="端口">
+                    <el-input-number v-model="datasourceForm.port" :min="1" :max="65535" style="width: 100%;" placeholder="默认9092" />
+                    <div style="color: #909399; font-size: 12px; margin-top: 4px;">如果主机地址已包含端口，此项可忽略</div>
+                </el-form-item>
+                <el-form-item label="Consumer Group">
+                    <el-input v-model="datasourceForm.properties.group_id" placeholder="消费者组ID（可选）" />
+                    <div style="color: #909399; font-size: 12px; margin-top: 4px;">存储在 properties.group_id</div>
+                </el-form-item>
+                <el-form-item label="SASL机制">
+                    <el-select v-model="datasourceForm.properties.sasl_mechanism" placeholder="选择SASL机制（可选）" clearable style="width: 100%;">
+                        <el-option label="PLAIN" value="PLAIN" />
+                        <el-option label="SCRAM-SHA-256" value="SCRAM-SHA-256" />
+                        <el-option label="SCRAM-SHA-512" value="SCRAM-SHA-512" />
+                        <el-option label="GSSAPI (Kerberos)" value="GSSAPI" />
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="用户名" v-if="datasourceForm.properties.sasl_mechanism">
+                    <el-input v-model="datasourceForm.username" placeholder="SASL用户名" />
+                </el-form-item>
+                <el-form-item label="密码" v-if="datasourceForm.properties.sasl_mechanism">
+                    <el-input v-model="datasourceForm.password" type="password" placeholder="SASL密码" show-password />
+                </el-form-item>
+            </template>
+            
+            <!-- 数据库配置 -->
+            <template v-else>
+                <el-form-item label="主机" required>
+                    <el-input v-model="datasourceForm.host" placeholder="IP地址或主机名" />
+                </el-form-item>
+                <el-form-item label="端口" required>
+                    <el-input-number v-model="datasourceForm.port" :min="1" :max="65535" style="width: 100%;" />
+                </el-form-item>
+                <el-form-item label="数据库" required>
+                    <el-input v-model="datasourceForm.database" placeholder="数据库名称" />
+                </el-form-item>
+                <el-form-item label="用户名" required>
+                    <el-input v-model="datasourceForm.username" placeholder="数据库用户名" />
+                </el-form-item>
+                <el-form-item label="密码" required>
+                    <el-input v-model="datasourceForm.password" type="password" placeholder="数据库密码" show-password />
+                </el-form-item>
+            </template>
         </el-form>
         <template #footer>
             <el-button @click="datasourceDialogVisible = false">取消</el-button>

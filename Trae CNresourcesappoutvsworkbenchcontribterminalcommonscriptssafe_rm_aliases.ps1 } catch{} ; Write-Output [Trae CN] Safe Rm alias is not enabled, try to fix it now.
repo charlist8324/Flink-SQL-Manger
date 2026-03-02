@@ -1,0 +1,75 @@
+warning: in the working copy of 'frontend/dist/pages/sql.js', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/frontend/dist/pages/sql.js b/frontend/dist/pages/sql.js[m
+[1mindex 1ff9ede..9d6e983 100644[m
+[1m--- a/frontend/dist/pages/sql.js[m
+[1m+++ b/frontend/dist/pages/sql.js[m
+[36m@@ -28,6 +28,7 @@[m [mexport default {[m
+         const createTableSqlVisible = ref(false);[m
+         const currentCreateTableSql = ref('');[m
+         const currentEditingTable = ref(null);[m
+[32m+[m[32m        const flinkConfig = ref({ checkpoint_path: '', savepoint_path: '' });[m
+ [m
+         const sourceConnectorGroups = ref([[m
+             {[m
+[36m@@ -2043,6 +2044,11 @@[m [mexport default {[m
+                 sql += `SET 'execution.checkpointing.interval' = '30000ms';\n`;[m
+                 sql += `SET 'execution.checkpointing.mode' = 'EXACTLY_ONCE';\n`;[m
+             }[m
+[32m+[m[41m            [m
+[32m+[m[32m            if (flinkConfig.value.checkpoint_path) {[m
+[32m+[m[32m                sql += `SET 'execution.checkpointing.dir' = '${flinkConfig.value.checkpoint_path}';\n`;[m
+[32m+[m[32m            }[m
+[32m+[m[41m            [m
+             sql += '\n';[m
+             sourceTables.value.forEach(table => { sql += generateSourceTableSQL(table); });[m
+             sinkTables.value.forEach(table => { sql += generateSinkTableSQL(table); });[m
+[36m@@ -2523,6 +2529,20 @@[m [mexport default {[m
+             } catch (e) {[m
+                 console.error('加载数据源失败', e);[m
+             }[m
+[32m+[m[41m            [m
+[32m+[m[32m            try {[m
+[32m+[m[32m                const res = await fetch('/api/flink-config');[m
+[32m+[m[32m                const configs = await res.json();[m
+[32m+[m[32m                configs.forEach(config => {[m
+[32m+[m[32m                    if (config.config_key === 'checkpoint_path') {[m
+[32m+[m[32m                        flinkConfig.value.checkpoint_path = config.config_value;[m
+[32m+[m[32m                    } else if (config.config_key === 'savepoint_path') {[m
+[32m+[m[32m                        flinkConfig.value.savepoint_path = config.config_value;[m
+[32m+[m[32m                    }[m
+[32m+[m[32m                });[m
+[32m+[m[32m            } catch (e) {[m
+[32m+[m[32m                console.error('加载Flink配置失败', e);[m
+[32m+[m[32m            }[m
+         });[m
+ [m
+         return {[m
+[36m@@ -2871,28 +2891,6 @@[m [mexport default {[m
+                     </div>[m
+ [m
+                     <div v-if="sinkCommonConfig.connectorType === 'doris'">[m
+[31m-                        <el-row :gutter="20">[m
+[31m-                            <el-col :span="12"><el-form-item label="FE 地址"><el-input v-model="sinkCommonConfig.dorisUrl" placeholder="jdbc:mysql://localhost:9030/db" /></el-form-item></el-col>[m
+[31m-                            <el-col :span="12"><el-form-item label="驱动类"><el-input v-model="sinkCommonConfig.dorisDriver" placeholder="com.mysql.cj.jdbc.Driver" /></el-form-item></el-col>[m
+[31m-                        </el-row>[m
+[31m-                        <el-row :gutter="20">[m
+[31m-                            <el-col :span="12"><el-form-item label="用户名"><el-input v-model="sinkCommonConfig.dorisUsername" placeholder="用户名" /></el-form-item></el-col>[m
+[31m-                            <el-col :span="12"><el-form-item label="密码"><el-input v-model="sinkCommonConfig.dorisPassword" type="password" placeholder="密码" /></el-form-item></el-col>[m
+[31m-                        </el-row>[m
+[31m-                    </div>[m
+[31m-[m
+[31m-                    <div v-if="['jdbc', 'jdbc-upsert', 'postgres-jdbc', 'oracle-jdbc', 'sqlserver-jdbc'].includes(sinkCommonConfig.connectorType)">[m
+[31m-                        <el-row :gutter="20">[m
+[31m-                            <el-col :span="12"><el-form-item label="JDBC URL"><el-input v-model="sinkCommonConfig.jdbcUrl" placeholder="jdbc:mysql://localhost:3306/db" /></el-form-item></el-col>[m
+[31m-                            <el-col :span="12"><el-form-item label="驱动类"><el-input v-model="sinkCommonConfig.jdbcDriver" placeholder="com.mysql.cj.jdbc.Driver" /></el-form-item></el-col>[m
+[31m-                        </el-row>[m
+[31m-                        <el-row :gutter="20">[m
+[31m-                            <el-col :span="12"><el-form-item label="用户名"><el-input v-model="sinkCommonConfig.jdbcUsername" placeholder="用户名" /></el-form-item></el-col>[m
+[31m-                            <el-col :span="12"><el-form-item label="密码"><el-input v-model="sinkCommonConfig.jdbcPassword" type="password" placeholder="密码" /></el-form-item></el-col>[m
+[31m-                        </el-row>[m
+[31m-                    </div>[m
+[31m-[m
+[31m-                    <div v-if="sinkCommonConfig.connectorType === 'starrocks'">[m
+                         <el-row :gutter="20">[m
+                             <el-col :span="12"><el-form-item label="FE 地址"><el-input v-model="sinkCommonConfig.starrocksUrl" placeholder="jdbc:mysql://localhost:9030/db" /></el-form-item></el-col>[m
+                             <el-col :span="12"><el-form-item label="驱动类"><el-input v-model="sinkCommonConfig.starrocksDriver" placeholder="com.mysql.cj.jdbc.Driver" /></el-form-item></el-col>[m
