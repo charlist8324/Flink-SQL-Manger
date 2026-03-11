@@ -2,6 +2,7 @@
 
 Flink Manager 是一个低代码的 Apache Flink SQL 可视化配置管理平台，通过图形化界面简化实时计算作业的开发、部署和运维。无需手动编写复杂的 Flink SQL 和连接器配置，只需通过表单选择即可快速构建实时数据集成任务。
 
+
 ## 仅需三步，完成一个Flink SQL作业配置
 
 ### 第一步：配置源表
@@ -21,7 +22,7 @@ Flink Manager 是一个低代码的 Apache Flink SQL 可视化配置管理平台
 
 ![描述](./pic/SQL预览.png)
 
-> 整个过程无需编写任何 SQL 代码，所有配置通过表单完成，大幅降低 Flink 实时计算的开发门槛。
+> ### 整个过程无需编写任何 SQL 代码，所有配置通过表单完成，大幅降低 Flink 实时计算的开发门槛。
 
 ## 核心特性
 
@@ -51,7 +52,7 @@ Flink Manager 是一个低代码的 Apache Flink SQL 可视化配置管理平台
 | MySQL CDC | 支持增量快照、无锁读取 |
 | PostgreSQL CDC | 支持 Schema 配置、Slot 管理 |
 | SQL Server CDC | 支持 Schema 配置 |
-| Oracle CDC | 支持 Service Name 配置 |
+| Oracle CDC | 未进行深入测试 |
 | TiDB CDC | 未进行深入测试，进行中 |
 | OceanBase CDC | 未进行深入测试，进行中 |
 | Kafka | 支持 Topic 自动发现、Schema 推断、5种启动模式 |
@@ -63,7 +64,7 @@ Flink Manager 是一个低代码的 Apache Flink SQL 可视化配置管理平台
 | Doris | 支持 UNIQUE/AGGREGATE/DUPLICATE 表类型，自动建表 |
 | StarRocks | 支持主键/聚合/明细表，自动建表 |
 | ClickHouse | 支持 MergeTree 引擎，自动建表 |
-| Kafka | 支持 JSON/Avro 格式，Topic 自动发现 |
+| Kafka | 未进行测试 |
 | MySQL JDBC | 支持批量写入优化 |
 | PostgreSQL JDBC | 支持自动类型映射 |
 | Oracle JDBC | 支持 NUMBER/VARCHAR2 类型 |
@@ -121,6 +122,27 @@ Flink Manager 是一个低代码的 Apache Flink SQL 可视化配置管理平台
 - **JOIN 关联**：支持多表关联
 - **窗口聚合**：支持滚动、滑动、会话窗口
 - **自定义 SQL**：支持手写复杂 SQL
+
+#### 聚合查询功能
+- **字段选择**：支持勾选 GROUP BY 字段，自动同步到 Sink 表
+- **聚合函数**：支持 COUNT、SUM、AVG、MIN、MAX 等常用聚合函数
+- **COUNT(*) 支持**：字段下拉列表支持选择 `*`，实现 `COUNT(*)` 统计
+- **字段别名**：聚合函数支持自定义别名，必填项
+- **WHERE 条件**：支持配置过滤条件
+- **HAVING 条件**：支持聚合后过滤
+- **主键自动设置**：GROUP BY 字段自动设为 Sink 表主键
+- **Sink 表同步**：一键同步聚合结果字段到 Sink 表，自动匹配字段类型
+
+#### 双流 JOIN 功能
+- **多表关联**：支持 INNER JOIN、LEFT JOIN、RIGHT JOIN、FULL JOIN
+- **图形化条件配置**：通过下拉框选择左右表字段，自动生成 JOIN 条件
+- **字段选择**：分别勾选左表和右表需要输出的字段
+- **主键设置**：支持选择 JOIN 结果的主键字段
+- **状态 TTL 配置**：可设置状态保留时间（1-168小时），防止 Regular JOIN 导致 OOM
+  - 默认 12 小时
+  - 自动生成 `SET 'table.exec.state.ttl' = '12h';` 配置
+- **WHERE 条件**：支持 JOIN 后的过滤条件
+- **Sink 表同步**：一键同步 JOIN 结果字段到 Sink 表
 
 ### 作业全生命周期管理
 

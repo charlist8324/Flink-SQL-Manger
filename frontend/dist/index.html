@@ -75,6 +75,9 @@
         .cluster-status .dot { width: 8px; height: 8px; border-radius: 50%; }
         .cluster-status .dot.online { background: #52c41a; }
         .cluster-status .dot.offline { background: #f5222d; }
+        .footer { background: #fff; border-top: 1px solid #e8e8e8; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #666; }
+        .footer a { text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -138,6 +141,15 @@
                     <component :is="currentPage" />
                 </div>
             </div>
+            
+            <!-- 底部版权信息 -->
+            <el-footer class="footer" height="40px">
+                <span>© 2026 Flink SQL Manager</span>
+                <span style="margin: 0 15px;">|</span>
+                <span>作者: charlist</span>
+                <span style="margin: 0 15px;">|</span>
+                <span>联系邮箱: <a href="mailto:chanchunyouxiang@qq.com" style="color: #1890ff;">chanchunyouxiang@qq.com</a></span>
+            </el-footer>
         </div>
     </div>
 

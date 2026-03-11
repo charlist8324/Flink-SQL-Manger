@@ -1,0 +1,1 @@
+file:/home/flink-1.18.1/checkpoint/savepoints/JOIN测试2/savepoint-6e9fd1-31ded0c46057

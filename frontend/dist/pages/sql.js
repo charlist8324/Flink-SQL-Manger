@@ -484,7 +484,10 @@ export default {
                 havingClause: '',
                 joinType: 'INNER',
                 joinTable: '',
-                joinCondition: '',
+                joinConditions: [],
+                joinSelectFields: [],
+                primaryKeyFields: [],
+                joinTtl: 12,
                 windowType: 'TUMBLE',
                 windowSize: '5 MINUTES',
                 slideSize: '1 MINUTE',
@@ -517,6 +520,15 @@ export default {
             query.aggregates.splice(index, 1);
         }
 
+        function addJoinCondition(query) {
+            query.joinConditions = query.joinConditions || [];
+            query.joinConditions.push({ leftField: '', rightField: '' });
+        }
+
+        function removeJoinCondition(query, index) {
+            query.joinConditions.splice(index, 1);
+        }
+
         function getFieldsByTable(tableName) {
             const sourceTable = sourceTables.value.find(t => t.tableName === tableName);
             return sourceTable ? (sourceTable.fields || []) : [];
@@ -531,6 +543,139 @@ export default {
 
         function getOtherSourceTables(currentTableName) {
             return sourceTables.value.filter(t => t.tableName !== currentTableName);
+        }
+
+        function getJoinQueryFields(query) {
+            const fields = [];
+            const sourceFields = getFieldsByTable(query.sourceTable);
+            const joinFields = getFieldsByTable(query.joinTable);
+            
+            if (query.selectFields) {
+                query.selectFields.forEach(fieldName => {
+                    const field = sourceFields.find(f => f.name === fieldName);
+                    if (field) fields.push(field);
+                });
+            }
+            if (query.joinSelectFields) {
+                query.joinSelectFields.forEach(fieldName => {
+                    const field = joinFields.find(f => f.name === fieldName);
+                    if (field) fields.push(field);
+                });
+            }
+            return fields;
+        }
+
+        function getAggregateFieldType(aggFunction, fieldName, sourceFields) {
+            const sourceField = sourceFields.find(f => f.name === fieldName);
+            const baseType = sourceField ? sourceField.type : 'BIGINT';
+            
+            switch (aggFunction) {
+                case 'COUNT':
+                    return 'BIGINT';
+                case 'SUM':
+                    if (baseType === 'INT' || baseType === 'INTEGER' || baseType === 'SMALLINT' || baseType === 'TINYINT') {
+                        return 'BIGINT';
+                    }
+                    return baseType === 'FLOAT' ? 'DOUBLE' : baseType;
+                case 'AVG':
+                    return 'DOUBLE';
+                case 'MIN':
+                case 'MAX':
+                    return baseType;
+                default:
+                    return 'BIGINT';
+            }
+        }
+
+        function updateSinkFieldsFromQuery(query) {
+            if (query.queryType !== 'aggregate' && query.queryType !== 'join') {
+                return;
+            }
+            
+            const sinkTable = sinkTables.value.find(t => t.tableName === query.sinkTable);
+            if (!sinkTable) {
+                ElMessage.warning('未找到对应的 Sink 表');
+                return;
+            }
+            
+            const sourceFields = getFieldsByTable(query.sourceTable);
+            const newFields = [];
+            
+            if (query.queryType === 'aggregate') {
+                if (query.selectFields && query.selectFields.length > 0) {
+                    query.selectFields.forEach(fieldName => {
+                        const sourceField = sourceFields.find(f => f.name === fieldName);
+                        if (sourceField) {
+                            const isGroupByField = query.groupByFields && query.groupByFields.includes(fieldName);
+                            newFields.push({
+                                name: fieldName,
+                                type: sourceField.type,
+                                precision: sourceField.precision || '',
+                                scale: sourceField.scale || '',
+                                primaryKey: isGroupByField
+                            });
+                        }
+                    });
+                }
+                
+                if (query.aggregates && query.aggregates.length > 0) {
+                    query.aggregates.forEach(agg => {
+                        const fieldName = agg.alias || (agg.function.toLowerCase() + '_' + (agg.field || 'all'));
+                        const fieldType = getAggregateFieldType(agg.function, agg.field, sourceFields);
+                        newFields.push({
+                            name: fieldName,
+                            type: fieldType,
+                            precision: '',
+                            scale: '',
+                            primaryKey: false
+                        });
+                    });
+                }
+            } else if (query.queryType === 'join') {
+                if (query.selectFields && query.selectFields.length > 0) {
+                    query.selectFields.forEach(fieldName => {
+                        const sourceField = sourceFields.find(f => f.name === fieldName);
+                        if (sourceField) {
+                            const isPrimaryKey = query.primaryKeyFields && query.primaryKeyFields.includes(fieldName);
+                            newFields.push({
+                                name: fieldName,
+                                type: sourceField.type,
+                                precision: sourceField.precision || '',
+                                scale: sourceField.scale || '',
+                                primaryKey: isPrimaryKey
+                            });
+                        }
+                    });
+                }
+                const joinFields = getFieldsByTable(query.joinTable);
+                if (query.joinSelectFields && query.joinSelectFields.length > 0) {
+                    query.joinSelectFields.forEach(fieldName => {
+                        const joinField = joinFields.find(f => f.name === fieldName);
+                        if (joinField) {
+                            const isPrimaryKey = query.primaryKeyFields && query.primaryKeyFields.includes(fieldName);
+                            newFields.push({
+                                name: fieldName,
+                                type: joinField.type,
+                                precision: joinField.precision || '',
+                                scale: joinField.scale || '',
+                                primaryKey: isPrimaryKey
+                            });
+                        }
+                    });
+                }
+            }
+            
+            if (newFields.length > 0) {
+                sinkTable.fields = newFields;
+                const primaryKeyCount = newFields.filter(f => f.primaryKey).length;
+                let message = '已同步 ' + newFields.length + ' 个字段到 Sink 表';
+                if (primaryKeyCount > 0) {
+                    message += '，其中 ' + primaryKeyCount + ' 个字段设为主键';
+                }
+                ElMessage.success(message);
+            } else {
+                ElMessage.warning('没有可同步的字段，请先选择字段或添加聚合函数');
+            }
         }
 
         function getConnectorLabel(type) {
@@ -1286,7 +1431,9 @@ export default {
         function onQueryTypeChange(query) {
             if (query.queryType !== 'join') {
                 query.joinTable = '';
-                query.joinCondition = '';
+                query.joinConditions = [];
+                query.joinSelectFields = [];
+                query.primaryKeyFields = [];
             }
             if (query.queryType !== 'window') {
                 query.windowTimeField = '';
@@ -1294,6 +1441,12 @@ export default {
             if (query.queryType !== 'aggregate') {
                 query.aggregates = [];
                 query.havingClause = '';
+            }
+            if (query.queryType === 'aggregate' || query.queryType === 'join') {
+                const fields = getFieldsByTable(query.sourceTable);
+                if (fields.length > 0 && (!query.selectFields || query.selectFields.length === 0)) {
+                    query.selectFields = fields.map(f => f.name);
+                }
             }
         }
 
@@ -1631,7 +1784,9 @@ export default {
                     havingClause: '',
                     joinType: 'INNER',
                     joinTable: '',
-                    joinCondition: '',
+                    joinConditions: [],
+                    joinSelectFields: [],
+                    primaryKeyFields: [],
                     windowType: 'TUMBLE',
                     windowSize: '5 MINUTES',
                     slideSize: '1 MINUTE',
@@ -1775,7 +1930,9 @@ export default {
                         havingClause: '',
                         joinType: 'INNER',
                         joinTable: '',
-                        joinCondition: '',
+                        joinConditions: [],
+                        joinSelectFields: [],
+                        primaryKeyFields: [],
                         windowType: 'TUMBLE',
                         windowSize: '5 MINUTES',
                         slideSize: '1 MINUTE',
@@ -2320,20 +2477,50 @@ export default {
                 if (query.whereClause) sql += ' WHERE ' + query.whereClause;
                 sql += ';\n\n';
             } else if (query.queryType === 'aggregate') {
-                let selectFields = [...query.groupByFields];
+                let selectFields = [];
+                if (query.selectFields && query.selectFields.length > 0) {
+                    selectFields = [...query.selectFields];
+                } else {
+                    selectFields = [...query.groupByFields];
+                }
                 if (query.aggregates && query.aggregates.length > 0) {
                     query.aggregates.forEach(agg => {
                         let aggExpr = agg.function + '(' + (agg.field ? '`' + agg.field + '`' : '*') + ')';
-                        if (agg.alias) aggExpr += ' AS `' + agg.alias + '`';
+                        if (agg.alias) {
+                            aggExpr += ' AS `' + agg.alias + '`';
+                        } else {
+                            const defaultAlias = agg.function.toLowerCase() + '_' + (agg.field || 'all');
+                            aggExpr += ' AS `' + defaultAlias + '`';
+                        }
                         selectFields.push(aggExpr);
                     });
                 }
-                sql = 'INSERT INTO `' + query.sinkTable + '`\nSELECT ' + selectFields.map(f => '`' + f + '`').join(', ') + '\nFROM `' + query.sourceTable + '`\n';
-                if (query.groupByFields && query.groupByFields.length > 0) sql += 'GROUP BY ' + query.groupByFields.map(f => '`' + f + '`').join(', ') + '\n';
-                if (query.havingClause) sql += 'HAVING ' + query.havingClause + '\n';
+                if (selectFields.length === 0) {
+                    selectFields = ['*'];
+                }
+                sql = 'INSERT INTO `' + query.sinkTable + '`\nSELECT ' + selectFields.map(f => {
+                    return f.includes('(') ? f : '`' + f + '`';
+                }).join(', ') + '\nFROM `' + query.sourceTable + '`';
+                if (query.whereClause) sql += '\nWHERE ' + query.whereClause;
+                if (query.groupByFields && query.groupByFields.length > 0) sql += '\nGROUP BY ' + query.groupByFields.map(f => '`' + f + '`').join(', ');
+                if (query.havingClause) sql += '\nHAVING ' + query.havingClause;
                 sql += ';\n\n';
             } else if (query.queryType === 'join') {
-                sql = 'INSERT INTO `' + query.sinkTable + '`\nSELECT * FROM `' + query.sourceTable + '`\n' + query.joinType + ' JOIN `' + query.joinTable + '` ON ' + query.joinCondition + ';\n\n';
+                let fields = [];
+                if (query.selectFields && query.selectFields.length > 0) {
+                    query.selectFields.forEach(f => fields.push('`' + query.sourceTable + '`.`' + f + '`'));
+                }
+                if (query.joinSelectFields && query.joinSelectFields.length > 0) {
+                    query.joinSelectFields.forEach(f => fields.push('`' + query.joinTable + '`.`' + f + '`'));
+                }
+                let fieldsStr = fields.length > 0 ? fields.join(', ') : '*';
+                let joinConditionStr = '1=1';
+                if (query.joinConditions && query.joinConditions.length > 0) {
+                    joinConditionStr = query.joinConditions.map(c => '`' + query.sourceTable + '`.`' + c.leftField + '` = `' + query.joinTable + '`.`' + c.rightField + '`').join(' AND ');
+                }
+                sql = 'INSERT INTO `' + query.sinkTable + '`\nSELECT ' + fieldsStr + ' FROM `' + query.sourceTable + '`\n' + query.joinType + ' JOIN `' + query.joinTable + '` ON ' + joinConditionStr;
+                if (query.whereClause) sql += '\nWHERE ' + query.whereClause;
+                sql += ';\n\n';
             } else if (query.queryType === 'window') {
                 let windowFunc = query.windowType + '(TABLE `' + query.sourceTable + '`, DESCRIPTOR(`' + query.windowTimeField + '`), ' + query.windowSize + ')';
                 sql = 'INSERT INTO `' + query.sinkTable + '`\nSELECT * FROM TABLE(' + windowFunc + ');\n\n';
@@ -2358,6 +2545,12 @@ export default {
             
             if (flinkConfig.value.checkpoint_path) {
                 sql += `SET 'execution.checkpointing.dir' = '${flinkConfig.value.checkpoint_path}';\n`;
+            }
+            
+            const joinQueries = queries.value.filter(q => q.queryType === 'join');
+            if (joinQueries.length > 0) {
+                const ttlValue = joinQueries[0].joinTtl || 12;
+                sql += `SET 'table.exec.state.ttl' = '${ttlValue}h';\n`;
             }
             
             sql += '\n';
@@ -2867,7 +3060,7 @@ export default {
             sinkTableOptions: computed(() => sinkTables.value.map(t => ({ label: t.tableName, value: t.tableName }))),
             addSourceTable, removeSourceTable, addSinkTable, removeSinkTable,
             addField, removeField, handlePrimaryKey, addQuery, removeQuery, clearAllQueries,
-            addAggregate, removeAggregate, getFieldsByTable, getTimeFields, getOtherSourceTables,
+            addAggregate, removeAggregate, addJoinCondition, removeJoinCondition, getFieldsByTable, getTimeFields, getOtherSourceTables, getJoinQueryFields,
             getConnectorLabel, syncTableName, applyDatasource, updateJdbcUrl, autoFillDriver,
             autoFillDriverCommon, getDatasourcesForConnector, handleCommonConnectorChange, applyCommonDatasource,
             applyCommonConfigToAllSinks,
@@ -2880,6 +3073,7 @@ export default {
             handleSinkConnectorChange, openTableSelection, selectTable, loadFieldsFromDb,
             handleTableSelectionChange, confirmTableSelection,
             onQueryTypeChange, onQuerySourceTableChange,
+            updateSinkFieldsFromQuery,
             previewCreateTableSql, executeCreateTable,
             showSqlPreviewDialog, copySql, submitSql
         };
@@ -3165,9 +3359,9 @@ export default {
                                     <el-row :gutter="10">
                                         <el-col :span="6"><el-input v-model="field.name" placeholder="字段名" size="small" /></el-col>
                                         <el-col :span="5">
-                                            <select v-model="field.type" class="native-select">
-                                                <option v-for="t in fieldTypes" :key="t" :value="t">{{ t }}</option>
-                                            </select>
+                                            <el-select v-model="field.type" size="small" style="width: 100%;">
+                                                <el-option v-for="t in fieldTypes" :key="t" :label="t" :value="t" />
+                                            </el-select>
                                         </el-col>
                                         <el-col :span="4"><el-input v-if="['VARCHAR','CHAR','DECIMAL','TIMESTAMP','TIMESTAMP_LTZ'].includes(field.type)" v-model="field.precision" placeholder="精度" size="small" /><span v-else style="color: #ccc;">-</span></el-col>
                                         <el-col :span="4"><el-input v-if="field.type === 'DECIMAL'" v-model="field.scale" placeholder="标度" size="small" /><span v-else style="color: #ccc;">-</span></el-col>
@@ -3356,9 +3550,9 @@ export default {
                         <el-row :gutter="10">
                             <el-col :span="6"><el-input v-model="field.name" placeholder="字段名" size="small" /></el-col>
                             <el-col :span="5">
-                                <select v-model="field.type" class="native-select">
-                                    <option v-for="t in fieldTypes" :key="t" :value="t">{{ t }}</option>
-                                </select>
+                                <el-select v-model="field.type" size="small" style="width: 100%;">
+                                    <el-option v-for="t in fieldTypes" :key="t" :label="t" :value="t" />
+                                </el-select>
                             </el-col>
                             <el-col :span="4"><el-input v-if="['VARCHAR','CHAR','DECIMAL','TIMESTAMP','TIMESTAMP_LTZ'].includes(field.type)" v-model="field.precision" placeholder="精度" size="small" /><span v-else style="color: #ccc;">-</span></el-col>
                             <el-col :span="4"><el-input v-if="field.type === 'DECIMAL'" v-model="field.scale" placeholder="标度" size="small" /><span v-else style="color: #ccc;">-</span></el-col>
@@ -3445,6 +3639,11 @@ export default {
                     </div>
 
                     <div v-if="query.queryType === 'aggregate'">
+                        <el-form-item label="选择字段">
+                            <el-checkbox-group v-model="query.selectFields">
+                                <el-checkbox v-for="field in getFieldsByTable(query.sourceTable)" :key="field.name" :label="field.name">{{ field.name }} ({{ field.type }})</el-checkbox>
+                            </el-checkbox-group>
+                        </el-form-item>
                         <el-form-item label="分组字段">
                             <el-checkbox-group v-model="query.groupByFields">
                                 <el-checkbox v-for="field in getFieldsByTable(query.sourceTable)" :key="field.name" :label="field.name">{{ field.name }} ({{ field.type }})</el-checkbox>
@@ -3453,26 +3652,37 @@ export default {
                         <el-form-item label="聚合函数">
                             <div v-for="(agg, aggIndex) in query.aggregates" :key="aggIndex" style="margin-bottom: 10px;">
                                 <el-row :gutter="10">
-                                    <el-col :span="6">
+                                    <el-col :span="5">
                                         <el-select v-model="agg.function" placeholder="函数" size="small" style="width: 100%;">
                                             <el-option label="COUNT" value="COUNT" /><el-option label="SUM" value="SUM" />
                                             <el-option label="AVG" value="AVG" /><el-option label="MIN" value="MIN" />
                                             <el-option label="MAX" value="MAX" />
                                         </el-select>
                                     </el-col>
-                                    <el-col :span="6">
+                                    <el-col :span="5">
                                         <el-select v-model="agg.field" placeholder="字段" size="small" style="width: 100%;">
-                                            <el-option v-for="field in getFieldsByTable(query.sourceTable)" :key="field.name" :label="field.name" :value="field.name" />
+                                            <el-option label="* (所有行)" value="" />
+                                            <el-option v-for="field in getFieldsByTable(query.sourceTable)" :key="field.name" :label="field.name + ' (' + field.type + ')'" :value="field.name" />
                                         </el-select>
                                     </el-col>
-                                    <el-col :span="10"><el-input v-model="agg.alias" placeholder="别名 (可选)" size="small" /></el-col>
-                                    <el-col :span="2"><el-button size="small" type="danger" @click="removeAggregate(query, aggIndex)">删除</el-button></el-col>
+                                    <el-col :span="5"><el-input v-model="agg.alias" placeholder="别名 (必填)" size="small" required /></el-col>
+                                    <el-col :span="4"><el-button size="small" type="danger" @click="removeAggregate(query, aggIndex)" style="width: 100%;">删除</el-button></el-col>
+                                    <el-col :span="5" v-if="aggIndex === query.aggregates.length - 1"><el-button size="small" @click="addAggregate(query)" style="width: 100%;">添加聚合</el-button></el-col>
                                 </el-row>
                             </div>
-                            <el-button size="small" @click="addAggregate(query)">添加聚合</el-button>
+                            <div v-if="!query.aggregates || query.aggregates.length === 0">
+                                <el-button size="small" @click="addAggregate(query)">添加聚合函数</el-button>
+                            </div>
+                        </el-form-item>
+                        <el-form-item label="WHERE 条件">
+                            <el-input v-model="query.whereClause" type="textarea" :rows="2" placeholder="例如: id > 100 AND name LIKE '%test%'" />
                         </el-form-item>
                         <el-form-item label="HAVING 条件">
-                            <el-input v-model="query.havingClause" type="textarea" :rows="2" placeholder="例如: COUNT(*) > 10" />
+                            <el-input v-model="query.havingClause" type="textarea" :rows="2" placeholder="例如: COUNT(phone) > 10（建议与上面聚合函数保持一致）" />
+                        </el-form-item>
+                        <el-form-item>
+                            <el-button type="primary" size="small" @click="updateSinkFieldsFromQuery(query)">同步字段到 Sink 表</el-button>
+                            <span style="margin-left: 10px; color: #909399; font-size: 12px;">根据选择的字段和聚合函数自动更新 Sink 表结构</span>
                         </el-form-item>
                     </div>
 
@@ -3484,12 +3694,59 @@ export default {
                             </el-select>
                         </el-form-item>
                         <el-form-item label="连接表">
-                            <el-select v-model="query.joinTable" placeholder="选择连接表" style="width: 100%;">
+                            <el-select v-model="query.joinTable" placeholder="选择连接表" style="width: 100%;" @change="query.joinConditions = []">
                                 <el-option v-for="table in getOtherSourceTables(query.sourceTable)" :key="table.tableName" :label="table.tableName" :value="table.tableName" />
                             </el-select>
                         </el-form-item>
-                        <el-form-item label="连接条件">
-                            <el-input v-model="query.joinCondition" placeholder="例如: t1.id = t2.user_id" />
+                        <el-form-item label="左表字段" v-if="query.joinTable">
+                            <el-checkbox-group v-model="query.selectFields">
+                                <el-checkbox v-for="field in getFieldsByTable(query.sourceTable)" :key="field.name" :label="field.name">{{ field.name }} ({{ field.type }})</el-checkbox>
+                            </el-checkbox-group>
+                        </el-form-item>
+                        <el-form-item label="右表字段" v-if="query.joinTable">
+                            <el-checkbox-group v-model="query.joinSelectFields">
+                                <el-checkbox v-for="field in getFieldsByTable(query.joinTable)" :key="field.name" :label="field.name">{{ field.name }} ({{ field.type }})</el-checkbox>
+                            </el-checkbox-group>
+                        </el-form-item>
+                        <el-form-item label="主键字段" v-if="query.joinTable">
+                            <el-checkbox-group v-model="query.primaryKeyFields">
+                                <el-checkbox v-for="field in getJoinQueryFields(query)" :key="field.name" :label="field.name">{{ field.name }} ({{ field.type }})</el-checkbox>
+                            </el-checkbox-group>
+                        </el-form-item>
+                        <el-form-item label="连接条件" v-if="query.joinTable">
+                            <div v-for="(cond, condIndex) in query.joinConditions" :key="condIndex" style="margin-bottom: 10px;">
+                                <el-row :gutter="10">
+                                    <el-col :span="9">
+                                        <el-select v-model="cond.leftField" placeholder="左表字段" size="small" style="width: 100%;">
+                                            <el-option v-for="field in getFieldsByTable(query.sourceTable)" :key="field.name" :label="field.name + ' (' + field.type + ')'" :value="field.name" />
+                                        </el-select>
+                                    </el-col>
+                                    <el-col :span="2" style="text-align: center; line-height: 32px;">=</el-col>
+                                    <el-col :span="9">
+                                        <el-select v-model="cond.rightField" placeholder="右表字段" size="small" style="width: 100%;">
+                                            <el-option v-for="field in getFieldsByTable(query.joinTable)" :key="field.name" :label="field.name + ' (' + field.type + ')'" :value="field.name" />
+                                        </el-select>
+                                    </el-col>
+                                    <el-col :span="4"><el-button size="small" type="danger" @click="removeJoinCondition(query, condIndex)" style="width: 100%;">删除</el-button></el-col>
+                                </el-row>
+                            </div>
+                            <div style="margin-top: 15px;" v-if="query.joinConditions && query.joinConditions.length > 0">
+                                <el-button size="small" @click="addJoinCondition(query)">添加连接条件</el-button>
+                            </div>
+                            <div v-if="!query.joinConditions || query.joinConditions.length === 0">
+                                <el-button size="small" @click="addJoinCondition(query)">添加连接条件</el-button>
+                            </div>
+                        </el-form-item>
+                        <el-form-item label="状态 TTL">
+                            <el-input-number v-model="query.joinTtl" :min="1" :max="168" :step="1" size="small" />
+                            <span style="margin-left: 10px; color: #909399; font-size: 12px;">小时（Regular JOIN 状态保留时间，防止 OOM）</span>
+                        </el-form-item>
+                        <el-form-item label="WHERE 条件">
+                            <el-input v-model="query.whereClause" type="textarea" :rows="2" placeholder="例如: t1.id > 100 AND t2.status = 'active'" />
+                        </el-form-item>
+                        <el-form-item>
+                            <el-button type="primary" size="small" @click="updateSinkFieldsFromQuery(query)">同步字段到 Sink 表</el-button>
+                            <span style="margin-left: 10px; color: #909399; font-size: 12px;">根据选择的字段自动更新 Sink 表结构</span>
                         </el-form-item>
                     </div>
 
